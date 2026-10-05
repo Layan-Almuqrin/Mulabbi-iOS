@@ -1,10 +1,3 @@
-//
-//  ContentView.swift
-//  Mulabbi
-//
-//  Created by Layan Almuqrin on 03/04/1448 AH.
-//
-
 import SwiftUI
 
 struct ContentView: View {
