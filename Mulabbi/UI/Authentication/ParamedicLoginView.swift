@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseAuth
+import FirebaseFirestore
 
 struct ParamedicLoginView: View {
 
@@ -10,6 +12,9 @@ struct ParamedicLoginView: View {
     @State private var username = ""
     @State private var password = ""
     @State private var isPasswordVisible = false
+    @State private var showErrors = false
+    @State private var errorMessage: String?
+    @State private var isLoading = false
 
     init(
         onLogin: @escaping () -> Void = {},
@@ -18,6 +23,58 @@ struct ParamedicLoginView: View {
         self.onLogin = onLogin
         self.onBack = onBack
     }
+
+    private func tr(_ en: String, _ ar: String) -> String {
+        appLanguage == "ar" ? ar : en
+    }
+
+    private var usernameError: String? {
+        username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? tr("Please enter your username", "يرجى إدخال اسم المستخدم")
+            : nil
+    }
+
+    private var passwordError: String? {
+        password.isEmpty
+            ? tr("Please enter your password", "يرجى إدخال كلمة المرور")
+            : nil
+    }
+
+    private func attemptLogin() {
+        showErrors = true
+        errorMessage = nil
+        guard usernameError == nil, passwordError == nil else { return }
+        isLoading = true
+        Task {
+            do {
+                let key = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                let doc = try await Firestore.firestore().collection("usernames").document(key).getDocument()
+                guard let email = doc.data()?["email"] as? String,
+                      (doc.data()?["role"] as? String) == "paramedic" else {
+                    throw LoginFailure.accountNotFound
+                }
+                let result = try await Auth.auth().signIn(withEmail: email, password: password)
+                guard result.user.isEmailVerified else {
+                    try Auth.auth().signOut()
+                    throw LoginFailure.emailNotVerified
+                }
+                await MainActor.run { isLoading = false; onLogin() }
+            } catch {
+                await MainActor.run {
+                    isLoading = false
+                    if error as? LoginFailure == .accountNotFound {
+                        errorMessage = tr("Account not found", "الحساب غير موجود")
+                    } else if error as? LoginFailure == .emailNotVerified {
+                        errorMessage = tr("Please verify your email before logging in", "يرجى تأكيد بريدك الإلكتروني قبل تسجيل الدخول")
+                    } else {
+                        errorMessage = tr("Username or password is incorrect", "اسم المستخدم أو كلمة المرور غير صحيحة")
+                    }
+                }
+            }
+        }
+    }
+
+    private enum LoginFailure: Error, Equatable { case accountNotFound, emailNotVerified }
 
     var body: some View {
 
@@ -70,71 +127,89 @@ struct ParamedicLoginView: View {
                             .font(.system(size: 15))
                             .foregroundColor(.black)
 
-                        HStack {
+                        VStack(alignment: .leading, spacing: 4) {
 
-                            Image(systemName: "person")
-                                .foregroundColor(.gray)
+                            HStack {
 
-                            textInput(
-                                "Enter your username",
-                                text: $username
-                            )
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(height: 46)
-                        .background(Color.gray.opacity(0.15))
-                        .cornerRadius(6)
+                                Image(systemName: "person")
+                                    .foregroundColor(.gray)
 
-                        HStack {
-
-                            Image(systemName: "lock")
-                                .foregroundColor(.gray)
-
-                            textInput(
-                                "Enter your password",
-                                text: $password,
-                                isSecure: !isPasswordVisible
-                            )
-
-                            Button {
-                                isPasswordVisible.toggle()
-                            } label: {
-                                Image(
-                                    systemName: isPasswordVisible
-                                    ? "eye"
-                                    : "eye.slash"
+                                textInput(
+                                    "Enter your username",
+                                    text: $username
                                 )
-                                .foregroundColor(.gray)
-                                .font(.system(size: 16))
                             }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(height: 46)
-                        .background(Color.gray.opacity(0.15))
-                        .cornerRadius(6)
+                            .padding(.horizontal, 12)
+                            .frame(height: 46)
+                            .background(Color.gray.opacity(0.15))
+                            .cornerRadius(6)
 
-                        NavigationLink(destination: ForgotPasswordView()) {
+                            errorText(usernameError)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+
+                            HStack {
+
+                                Image(systemName: "lock")
+                                    .foregroundColor(.gray)
+
+                                textInput(
+                                    "Enter your password",
+                                    text: $password,
+                                    isSecure: !isPasswordVisible
+                                )
+
+                                Button {
+                                    isPasswordVisible.toggle()
+                                } label: {
+                                    Image(
+                                        systemName: isPasswordVisible
+                                        ? "eye"
+                                        : "eye.slash"
+                                    )
+                                    .foregroundColor(.gray)
+                                    .font(.system(size: 16))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 12)
+                            .frame(height: 46)
+                            .background(Color.gray.opacity(0.15))
+                            .cornerRadius(6)
+
+                            errorText(passwordError)
+                        }
+
+                        HStack {
+                            if let errorMessage {
+                                Text(errorMessage)
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color.mulabbiMaroon)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            } else {
+                                Spacer()
+                            }
+                            NavigationLink(destination: ForgotPasswordView()) {
                             Text("Forgot password?")
                                 .font(.system(size: 12))
                                 .foregroundColor(Color.mulabbiMaroon)
+                            }
                         }
-                        .frame(
-                            maxWidth: .infinity,
-                            alignment: appLanguage == "ar" ? .leading : .trailing
-                        )
 
                         Button(action: {
-                            onLogin()
+                            attemptLogin()
                         }) {
-                            Text("Login")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.white)
+                            Group {
+                                if isLoading { ProgressView().tint(.white) }
+                                else { Text("Login").font(.system(size: 17, weight: .semibold)).foregroundColor(.white) }
+                            }
                                 .frame(maxWidth: .infinity)
                                 .frame(height: 51)
                                 .background(Color.mulabbiMaroon)
                                 .clipShape(Capsule())
                         }
+                        .disabled(isLoading)
 
                         HStack(spacing: 4) {
 
@@ -172,6 +247,18 @@ struct ParamedicLoginView: View {
         }
     }
 
+    // error under a field, only shown after Login is pressed
+    @ViewBuilder
+    private func errorText(_ message: String?) -> some View {
+        if showErrors, let message = message {
+            Text(message)
+                .font(.system(size: 11))
+                .foregroundColor(Color.mulabbiMaroon)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private func textInput(
         _ placeholder: LocalizedStringKey,
         text: Binding<String>,
@@ -204,3 +291,4 @@ struct ParamedicLoginView: View {
 #Preview {
     ParamedicLoginView()
 }
+
