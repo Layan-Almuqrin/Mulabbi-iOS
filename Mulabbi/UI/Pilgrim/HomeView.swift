@@ -60,15 +60,15 @@ private enum HomeAlert: Identifiable {
 
 struct HomeView: View {
     @AppStorage("appLanguage") private var appLanguage = "en"
+    @AppStorage("heartRateMonitoringEnabled") private var isWatchConnected = false
     @StateObject private var locationManager = LocationManager()
+    @StateObject private var heartRateMonitor = HeartRateMonitor.shared
     @ObservedObject var emergencyStore: CompanionEmergencyStore
 
     @State private var pendingAction: PendingAction?
     @State private var activeAlert: HomeAlert?
     @State private var showRequestDetailsSheet = false
     @State private var requestDetails = ""
-    @State private var isWatchConnected = false
-    @State private var showHeartRateAlert = false
     @State private var isSOSPulsing = false
     private let userName = "Shatha"
 
@@ -112,9 +112,9 @@ struct HomeView: View {
                     .zIndex(4)
                 }
 
-                if showHeartRateAlert {
-                    HeartRateSystemAlert {
-                        showHeartRateAlert = false
+                if let reading = heartRateMonitor.alertReading {
+                    HeartRateSystemAlert(reading: reading) {
+                        heartRateMonitor.dismissAlert()
                     }
                     .zIndex(5)
                 }
@@ -267,8 +267,9 @@ struct HomeView: View {
                     if isWatchConnected {
                         activeAlert = .disconnectWatch
                     } else {
-                        isWatchConnected = true
-                        showAutomaticHeartRateAlert()
+                        Task {
+                            try? await heartRateMonitor.connect()
+                        }
                     }
                 } label: {
                     Text(appLocalized(isWatchConnected ? "Disconnect" : "Connect"))
@@ -284,13 +285,6 @@ struct HomeView: View {
             .background(Color.mulabbiRoseTint)
             .clipShape(RoundedRectangle(cornerRadius: 18))
 
-        }
-    }
-
-    private func showAutomaticHeartRateAlert() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            guard isWatchConnected else { return }
-            showHeartRateAlert = true
         }
     }
 
@@ -320,7 +314,7 @@ struct HomeView: View {
         case .confirmOthers:
             showRequestDetailsSheet = true
         case .disconnectWatch:
-            isWatchConnected = false
+            heartRateMonitor.disconnect()
             dismissHomeAlert()
         }
     }
@@ -444,6 +438,7 @@ private struct HomeAlertOverlay: View {
 
 private struct HeartRateSystemAlert: View {
     @AppStorage("appLanguage") private var appLanguage = "en"
+    let reading: HeartRateReading
     let dismiss: () -> Void
 
     var body: some View {
@@ -452,11 +447,16 @@ private struct HeartRateSystemAlert: View {
                 .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 16) {
-                Text("High Heart Rate Detected")
+                Text(appLocalized(titleKey))
                     .font(.system(size: appLanguage == "ar" ? 20 : 22, weight: .bold))
                     .frame(maxWidth: .infinity, alignment: .center)
 
-                Text("Current: 155 bpm")
+                Text(
+                    String(
+                        format: appLocalized("Current: %@ bpm"),
+                        String(reading.bpm)
+                    )
+                )
                     .font(.system(size: appLanguage == "ar" ? 17 : 19))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -494,6 +494,17 @@ private struct HeartRateSystemAlert: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
             .shadow(color: .black.opacity(0.18), radius: 20, y: 8)
             .padding(.horizontal, 24)
+        }
+    }
+
+    private var titleKey: String {
+        switch reading.state {
+        case .high:
+            "High Heart Rate Detected"
+        case .low:
+            "Low Heart Rate Detected"
+        case .normal:
+            ""
         }
     }
 }
