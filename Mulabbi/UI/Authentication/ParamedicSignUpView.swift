@@ -42,13 +42,9 @@ struct ParamedicSignUpView: View {
     var isArabic: Bool {
         appLanguage == "ar"
     }
-
-    // picks the English or Arabic text
     private func tr(_ en: String, _ ar: String) -> String {
         isArabic ? ar : en
     }
-
-    // turns Arabic-Indic digits into normal digits
     private func westernDigits(_ text: String) -> String {
         text.map { character in
             character.wholeNumberValue.map { String($0) } ?? String(character)
@@ -124,8 +120,6 @@ struct ParamedicSignUpView: View {
     private var passwordsMatch: Bool {
         !confirmPassword.isEmpty && confirmPassword == password
     }
-
-    // format check only, the email is checked later with the code
     private var emailError: String? {
         let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let pattern = "^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}$"
@@ -146,8 +140,6 @@ struct ParamedicSignUpView: View {
         if isCheckingCertificate { return tr("Checking certificate…", "جارٍ فحص الشهادة…") }
         return certificateLooksEligible ? nil : tr("The certificate does not appear to match the required course and issuer", "الشهادة لا تبدو مطابقة للدورة والجهة المطلوبة")
     }
-
-    // the user's own declaration, the certificate is not checked
     private var confirmationError: String? {
         certificateConfirmed
             ? nil
@@ -168,8 +160,6 @@ struct ParamedicSignUpView: View {
         && certificateLooksEligible
         && certificateConfirmed
     }
-
-    // checks everything when Create Account is pressed
     private func validateAndSubmit() -> Bool {
         showErrors = true
         if isFormValid {
@@ -178,8 +168,6 @@ struct ParamedicSignUpView: View {
         }
         return false
     }
-
-    // keeps the picked file, nothing is uploaded yet
     private func handleFileSelection(_ result: Result<[URL], Error>) {
         switch result {
         case .success(let urls):
@@ -198,8 +186,6 @@ struct ParamedicSignUpView: View {
                     )
                     return
                 }
-
-                // a new file needs a new confirmation
                 if certificateURL != nil && certificateURL != url {
                     certificateConfirmed = false
                 }
@@ -259,19 +245,83 @@ struct ParamedicSignUpView: View {
 
     private func createAccount() {
         let emailValue = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let usernameKey = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let usernameValue = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let usernameKey = usernameValue.lowercased()
+        let firstNameValue = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lastNameValue = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ageValue = Int(westernDigits(age.trimmingCharacters(in: .whitespacesAndNewlines))) ?? 0
+        guard let certificateURL else {
+            signupMessage = tr("Please attach your certificate", "يرجى إرفاق الشهادة")
+            return
+        }
+        let database = Firestore.firestore()
         Task {
+            let hasSecurityAccess = certificateURL.startAccessingSecurityScopedResource()
+            defer {
+                if hasSecurityAccess {
+                    certificateURL.stopAccessingSecurityScopedResource()
+                }
+            }
             do {
-                let ref = Firestore.firestore().collection("usernames").document(usernameKey)
+                let certificateData = try Data(contentsOf: certificateURL)
+                guard certificateData.count <= 700 * 1024 else {
+                    await MainActor.run {
+                        signupMessage = tr(
+                            "Certificate file must be 700 KB or smaller",
+                            "يجب أن يكون حجم ملف الشهادة 700 كيلوبايت أو أقل"
+                        )
+                    }
+                    return
+                }
+                let ref = database.collection("usernames").document(usernameKey)
                 let existing = try await ref.getDocument()
                 guard !existing.exists else {
                     await MainActor.run { signupMessage = tr("Username is already taken", "اسم المستخدم مستخدم بالفعل") }
                     return
                 }
                 let result = try await Auth.auth().createUser(withEmail: emailValue, password: password)
-                try await result.user.sendEmailVerification()
-                try await ref.setData(["email": emailValue, "uid": result.user.uid, "role": "paramedic", "certificateStatus": "appears_eligible"])
-                await MainActor.run { showEmailVerification = true }
+                do {
+                    try await result.user.sendEmailVerification()
+                    let userRef = database.collection("users").document(result.user.uid)
+                    let certificateRef = database.collection("certificates").document(result.user.uid)
+                    let contentType = UTType(filenameExtension: certificateURL.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+                    let usernameData: [String: Any] = [
+                        "email": emailValue,
+                        "uid": result.user.uid,
+                        "role": "paramedic",
+                        "certificateStatus": "appears_eligible"
+                    ]
+                    let profileData: [String: Any] = [
+                        "uid": result.user.uid,
+                        "role": "paramedic",
+                        "username": usernameValue,
+                        "email": emailValue,
+                        "age": ageValue,
+                        "firstName": firstNameValue,
+                        "lastName": lastNameValue,
+                        "certificateFileName": certificateURL.lastPathComponent,
+                        "certificateDocumentId": result.user.uid,
+                        "certificateConfirmed": certificateConfirmed,
+                        "certificateStatus": "appears_eligible",
+                        "createdAt": FieldValue.serverTimestamp()
+                    ]
+                    let certificateRecord: [String: Any] = [
+                        "uid": result.user.uid,
+                        "fileName": certificateURL.lastPathComponent,
+                        "contentType": contentType,
+                        "fileBase64": certificateData.base64EncodedString(),
+                        "createdAt": FieldValue.serverTimestamp()
+                    ]
+                    let batch = database.batch()
+                    batch.setData(usernameData, forDocument: ref)
+                    batch.setData(profileData, forDocument: userRef)
+                    batch.setData(certificateRecord, forDocument: certificateRef)
+                    try await batch.commit()
+                    await MainActor.run { showEmailVerification = true }
+                } catch {
+                    try? await result.user.delete()
+                    throw error
+                }
             } catch {
                 await MainActor.run { signupMessage = error.localizedDescription }
             }
@@ -351,8 +401,6 @@ struct ParamedicSignUpView: View {
                                     placeholder: "Enter your username",
                                     text: $username
                                 )
-
-                                // username rules
                                 ruleRow(
                                     tr("4 to 20 characters", "من 4 إلى 20 حرفاً"),
                                     isMet: usernameHasValidLength
@@ -408,8 +456,6 @@ struct ParamedicSignUpView: View {
                                 text: $password,
                                 isVisible: $isPasswordVisible
                             )
-
-                            // password rules
                             ruleRow(
                                 tr("At least 8 characters", "8 أحرف على الأقل"),
                                 isMet: passwordHasMinLength
@@ -515,8 +561,6 @@ struct ParamedicSignUpView: View {
                                 }
                             }
                         }
-
-                        // certificate declaration
                         withError(confirmationError) {
 
                             Button(action: {
@@ -673,8 +717,6 @@ struct ParamedicSignUpView: View {
         }
         .frame(maxWidth: .infinity)
     }
-
-    // shows an error under a field after Create Account is pressed
     private func withError<Content: View>(
         _ message: String?,
         @ViewBuilder content: () -> Content
@@ -694,8 +736,6 @@ struct ParamedicSignUpView: View {
         }
         .frame(maxWidth: .infinity)
     }
-
-    // one rule line: gray, then green when met (maroon after Create Account if not met)
     private func ruleRow(_ text: String, isMet: Bool) -> some View {
         HStack(spacing: 4) {
             Image(systemName: isMet ? "checkmark.circle.fill" : "circle")
@@ -776,4 +816,5 @@ struct ParamedicSignUpView: View {
         ParamedicSignUpView()
     }
 }
+
 

@@ -42,13 +42,9 @@ struct PilgrimSignUpView: View {
     private var textAlign: TextAlignment {
         .leading
     }
-
-    // picks the English or Arabic text
     private func tr(_ en: String, _ ar: String) -> String {
         appLanguage == "ar" ? ar : en
     }
-
-    // turns Arabic-Indic digits into normal digits
     private func westernDigits(_ text: String) -> String {
         text.map { character in
             character.wholeNumberValue.map { String($0) } ?? String(character)
@@ -60,8 +56,6 @@ struct PilgrimSignUpView: View {
             ? tr("This field is required", "هذا الحقل مطلوب")
             : nil
     }
-
-    // medical fields: write None if there is nothing to add
     private func medicalError(_ value: String) -> String? {
         value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? tr("Required. Write \"None\" if you don't have any", "مطلوب. اكتب \"لا يوجد\" إذا ما عندك")
@@ -131,8 +125,6 @@ struct PilgrimSignUpView: View {
     private var passwordsMatch: Bool {
         !confirmPassword.isEmpty && confirmPassword == password
     }
-
-    // format check only, the email is checked later with the code
     private var emailError: String? {
         let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
         let pattern = "^[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(\\.[A-Za-z0-9-]+)*\\.[A-Za-z]{2,}$"
@@ -189,8 +181,6 @@ struct PilgrimSignUpView: View {
         && medicalError(medications) == nil
         && medicalError(allergies) == nil
     }
-
-    // checks everything when Sign Up is pressed
     private func validateAndSubmit() -> Bool {
         showErrors = true
         guard isFormValid else { return false }
@@ -200,23 +190,61 @@ struct PilgrimSignUpView: View {
 
     private func createAccount() {
         let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        let usernameKey = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let usernameValue = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let usernameKey = usernameValue.lowercased()
+        let firstNameValue = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lastNameValue = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let phoneValue = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        let nationalityValue = nationality.trimmingCharacters(in: .whitespacesAndNewlines)
+        let ageValue = Int(westernDigits(age.trimmingCharacters(in: .whitespacesAndNewlines))) ?? 0
+        let database = Firestore.firestore()
         Task {
             do {
-                let usernameRef = Firestore.firestore().collection("usernames").document(usernameKey)
+                let usernameRef = database.collection("usernames").document(usernameKey)
                 let existing = try await usernameRef.getDocument()
                 guard !existing.exists else {
                     await MainActor.run { signupMessage = tr("Username is already taken", "اسم المستخدم مستخدم بالفعل") }
                     return
                 }
                 let result = try await Auth.auth().createUser(withEmail: cleanEmail, password: password)
-                try await result.user.sendEmailVerification()
-                try await usernameRef.setData([
-                    "email": cleanEmail,
-                    "uid": result.user.uid,
-                    "role": "pilgrim"
-                ])
-                await MainActor.run { showEmailVerification = true }
+                do {
+                    try await result.user.sendEmailVerification()
+                    let userRef = database.collection("users").document(result.user.uid)
+                    let usernameData: [String: Any] = [
+                        "email": cleanEmail,
+                        "uid": result.user.uid,
+                        "role": "pilgrim"
+                    ]
+                    let profileData: [String: Any] = [
+                        "uid": result.user.uid,
+                        "role": "pilgrim",
+                        "username": usernameValue,
+                        "email": cleanEmail,
+                        "age": ageValue,
+                        "firstName": firstNameValue,
+                        "lastName": lastNameValue,
+                        "phoneNumber": phoneValue,
+                        "nationality": nationalityValue,
+                        "languages": selectedLanguages.sorted(),
+                        "medicalRecord": [
+                            "bloodType": bloodType,
+                            "gender": gender,
+                            "chronicDiseases": chronicDiseases.trimmingCharacters(in: .whitespacesAndNewlines),
+                            "medications": medications.trimmingCharacters(in: .whitespacesAndNewlines),
+                            "allergies": allergies.trimmingCharacters(in: .whitespacesAndNewlines),
+                            "otherInfo": otherInfo.trimmingCharacters(in: .whitespacesAndNewlines)
+                        ],
+                        "createdAt": FieldValue.serverTimestamp()
+                    ]
+                    let batch = database.batch()
+                    batch.setData(usernameData, forDocument: usernameRef)
+                    batch.setData(profileData, forDocument: userRef)
+                    try await batch.commit()
+                    await MainActor.run { showEmailVerification = true }
+                } catch {
+                    try? await result.user.delete()
+                    throw error
+                }
             } catch {
                 await MainActor.run { signupMessage = error.localizedDescription }
             }
@@ -306,8 +334,6 @@ struct PilgrimSignUpView: View {
                                     placeholder: "Enter your username",
                                     text: $username
                                 )
-
-                                // username rules
                                 ruleRow(
                                     tr("4 to 20 characters", "من 4 إلى 20 حرفاً"),
                                     isMet: usernameHasValidLength
@@ -364,8 +390,6 @@ struct PilgrimSignUpView: View {
                                 text: $password,
                                 isVisible: $isPasswordVisible
                             )
-
-                            // password rules
                             ruleRow(
                                 tr("At least 8 characters", "8 أحرف على الأقل"),
                                 isMet: passwordHasMinLength
@@ -630,10 +654,6 @@ struct PilgrimSignUpView: View {
         }
         .frame(maxWidth: .infinity)
     }
-
-
-
-    // shows an error under a field after Sign Up is pressed
     private func withError<Content: View>(
         _ message: String?,
         @ViewBuilder content: () -> Content
@@ -653,10 +673,6 @@ struct PilgrimSignUpView: View {
         }
         .frame(maxWidth: .infinity)
     }
-
-
-
-    // one rule line: gray, then green when met (red after Sign Up if not met)
     private func ruleRow(_ text: String, isMet: Bool) -> some View {
         HStack(spacing: 4) {
             Image(systemName: isMet ? "checkmark.circle.fill" : "circle")
@@ -804,8 +820,6 @@ struct PilgrimEmailVerificationView: View {
 
     @State private var code = ""
     @State private var message: String? = nil
-
-    // testing only: set to true to skip the code check
     private let skipCodeCheckForTesting = false
 
     private var isArabic: Bool {
@@ -821,8 +835,6 @@ struct PilgrimEmailVerificationView: View {
             character.wholeNumberValue.map { String($0) } ?? String(character)
         }.joined()
     }
-
-    // the real code check is added later
     private func verify() {
         guard code.count == 6 else {
             message = tr("Enter the 6-digit code", "أدخل الرمز المكوّن من 6 أرقام")

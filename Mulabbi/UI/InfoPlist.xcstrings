@@ -15,6 +15,7 @@
     },
     "NSHealthShareUsageDescription" : {
       "comment" : "Privacy - Health Share Usage Description",
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
