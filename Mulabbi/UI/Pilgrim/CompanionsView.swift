@@ -1,9 +1,11 @@
 import SwiftUI
+import UIKit
 
 struct CompanionsView: View {
     @ObservedObject var store: CompanionsStore
     @ObservedObject var emergencyStore: CompanionEmergencyStore
     let onIncomingSOS: () -> Void
+    @AppStorage("currentUsername") private var currentUsername = ""
 
     var body: some View {
         NavigationStack {
@@ -46,11 +48,11 @@ struct CompanionsView: View {
                         ScrollView(showsIndicators: false) {
                             LazyVStack(spacing: 16) {
                                 ForEach(store.companions) { companion in
+                                    /// يعرض كل مرافق ويغير حالة استلام تنبيهات الطوارئ عند الضغط على زر التفعيل  او التعطيل
                                     CompanionCard(
                                         companion: companion,
-                                        onSOS: {
-                                            emergencyStore.receiveSOS(from: companion)
-                                            onIncomingSOS()
+                                        onToggleAlerts: {
+                                            store.toggleAlert(for: companion)
                                         }
                                     )
                                 }
@@ -63,6 +65,10 @@ struct CompanionsView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
         }
+        .onAppear {
+            store.loadAcceptedCompanions(for: currentUsername)
+            store.loadIncomingRequests(for: currentUsername)
+        }
     }
 
     private func iconButton(_ icon: String, size: CGFloat = 22) -> some View {
@@ -74,11 +80,13 @@ struct CompanionsView: View {
             .clipShape(RoundedRectangle(cornerRadius: 16))
             .shadow(color: .black.opacity(0.15), radius: 4, y: 3)
     }
+
 }
 
 struct RequestsView: View {
     @ObservedObject var store: CompanionsStore
     @Environment(\.dismiss) private var dismiss
+    @AppStorage("currentUsername") private var currentUsername = ""
 
     var body: some View {
         ZStack {
@@ -113,6 +121,10 @@ struct RequestsView: View {
             .padding(.horizontal, 28)
         }
         .toolbar(.hidden, for: .navigationBar)
+        /// يحضر طلبات المرافق الخاصه بالمستخدم عند فتح الصفحه
+        .onAppear {
+            store.loadIncomingRequests(for: currentUsername)
+        }
     }
 }
 
@@ -121,7 +133,11 @@ private struct SearchCompanionsView: View {
 
     @ObservedObject var store: CompanionsStore
     @Environment(\.dismiss) private var dismiss
-    @FocusState private var isPhoneFieldFocused: Bool
+    @Environment(\.layoutDirection) private var layoutDirection
+    @AppStorage("appLanguage") private var appLanguage = "en"
+    @AppStorage("currentUsername") private var currentUsername = ""
+    private let companionFirebase = CompanionFirebase()
+    @State private var foundCompanion: Companion?
     @State private var phoneNumber = ""
     @State private var result: SearchResult = .none
     @State private var isRequestSent = false
@@ -134,12 +150,11 @@ private struct SearchCompanionsView: View {
                 Header(title: "Search") { dismiss() }
 
                 HStack(spacing: 10) {
-                    TextField("Enter Phone number...", text: $phoneNumber)
-                        .keyboardType(.phonePad)
-                        .textContentType(.telephoneNumber)
-                        .focused($isPhoneFieldFocused)
-                        .multilineTextAlignment(.trailing)
-                        .environment(\.layoutDirection, .leftToRight)
+                    PhoneNumberTextField(
+                        text: $phoneNumber,
+                        placeholder: localizedPhonePlaceholder,
+                        textAlignment: layoutDirection == .rightToLeft ? .right : .left
+                    )
                         .padding(.horizontal, 14)
                         .frame(height: 48)
                         .background(.white)
@@ -161,7 +176,6 @@ private struct SearchCompanionsView: View {
             .padding(.horizontal, 22)
         }
         .toolbar(.hidden, for: .navigationBar)
-        .onAppear { isPhoneFieldFocused = true }
     }
 
     @ViewBuilder
@@ -174,14 +188,117 @@ private struct SearchCompanionsView: View {
             EmptyState(icon: "person.2", text: "No companions found")
             Spacer()
         case .found:
-            SearchResultCard(isRequestSent: $isRequestSent)
+            /// يعرض بطاقة بيانات المستخدم الذي تم العثور عليه في الداتابيس
+            if let foundCompanion {
+                /// يعرض المستخدم الذي عثر عليه ويرسل طلب اضافته كمرافق عند الضغط على زر الإضافة
+                SearchResultCard(
+                    companion: foundCompanion,
+                    isRequestSent: $isRequestSent,
+                    onAdd: {
+                        sendCompanionRequest(for: foundCompanion)
+                    }
+                )
                 .padding(.top, 25)
+            }
         }
     }
-
+    /// يبحث عن مستخدم مسجل برقم الجوال ويحدث نتيجة البحث في الواجهة.
     private func performSearch() {
-        result = phoneNumber.filter(\.isNumber) == "0556786799" ? .found : .notFound
+        let enteredPhoneNumber = phoneNumber.filter(\.isNumber)
+
+        guard !enteredPhoneNumber.isEmpty else {
+            foundCompanion = nil
+            result = .none
+            return
+        }
+
         isRequestSent = false
+
+        companionFirebase.findPilgrim(by: enteredPhoneNumber) { searchResult in
+            DispatchQueue.main.async {
+                switch searchResult {
+                case .success(let companion):
+                    foundCompanion = companion
+                    result = companion == nil ? .notFound : .found
+
+                case .failure:
+                    foundCompanion = nil
+                    result = .notFound
+                }
+            }
+        }
+    }
+    /// يرسل طلب إضافة المرافق الذي اختاره المستخدم.
+    private func sendCompanionRequest(for companion: Companion) {
+        guard !currentUsername.isEmpty else {
+            return
+        }
+
+        companionFirebase.sendCompanionRequest(
+            pilgrimUsername: currentUsername,
+            companion: companion
+        ) { requestResult in
+            DispatchQueue.main.async {
+                if case .success = requestResult {
+                    isRequestSent = true
+                }
+            }
+        }
+    }
+    private var localizedPhonePlaceholder: String {
+        let bundle = Bundle.main.path(forResource: appLanguage, ofType: "lproj")
+            .flatMap(Bundle.init(path:)) ?? .main
+        return bundle.localizedString(
+            forKey: "Enter Phone number...",
+            value: "Enter Phone number...",
+            table: "Localizable"
+        )
+    }
+}
+
+private struct PhoneNumberTextField: UIViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    let textAlignment: NSTextAlignment
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeUIView(context: Context) -> UITextField {
+        let textField = UITextField()
+        textField.keyboardType = .phonePad
+        textField.textContentType = .telephoneNumber
+        textField.font = .preferredFont(forTextStyle: .body)
+        textField.adjustsFontForContentSizeCategory = true
+        textField.semanticContentAttribute = .forceLeftToRight
+        textField.delegate = context.coordinator
+        textField.addTarget(context.coordinator, action: #selector(Coordinator.textDidChange), for: .editingChanged)
+
+        DispatchQueue.main.async {
+            textField.becomeFirstResponder()
+        }
+        return textField
+    }
+
+    func updateUIView(_ textField: UITextField, context: Context) {
+        if textField.text != text {
+            textField.text = text
+        }
+        textField.placeholder = placeholder
+        textField.textAlignment = textAlignment
+    }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        @Binding private var text: String
+
+        init(text: Binding<String>) {
+            _text = text
+        }
+
+        @objc func textDidChange(_ textField: UITextField) {
+            text = textField.text ?? ""
+        }
     }
 }
 
@@ -216,21 +333,23 @@ private struct EmptyState: View {
     var body: some View {
         VStack(spacing: 18) {
             Image(systemName: icon).font(.system(size: 64, weight: .ultraLight))
-            Text(text).font(.system(size: 22))
+            Text(LocalizedStringKey(text)).font(.system(size: 22))
         }
     }
 }
 
 private struct SearchResultCard: View {
+    let companion: Companion
     @Binding var isRequestSent: Bool
-    private let atheer = Companion(name: "Atheer Alhashel", username: "Atheer7", phoneNumber: "0556786799")
-
+    let onAdd: () -> Void
     var body: some View {
         HStack(spacing: 12) {
-            PersonDetails(person: atheer)
+            PersonDetails(person: companion)
             Spacer(minLength: 4)
-            Button(isRequestSent ? "Sent" : "Add") { isRequestSent = true }
-                .font(.caption.weight(.bold))
+            Button(isRequestSent ? "Sent" : "Add") {
+                onAdd()
+            }
+            .font(.caption.weight(.bold))
                 .foregroundStyle(Color.mulabbiMaroon)
                 .frame(width: 58, height: 38)
                 .background(.white)
@@ -244,16 +363,22 @@ private struct SearchResultCard: View {
 
 private struct CompanionCard: View {
     let companion: Companion
-    let onSOS: () -> Void
-
+    let onToggleAlerts: () -> Void
+    
     var body: some View {
         HStack(spacing: 12) {
             PersonDetails(person: companion)
             Spacer()
-            Button(action: onSOS) {
-                Image(systemName: "exclamationmark.circle")
-                    .font(.title3)
-                    .foregroundStyle(.black)
+            Button(action: onToggleAlerts) {
+                Text(companion.isAlertEnabled ? "Enabled" : "Disabled")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        companion.isAlertEnabled ? Color.green : Color.gray
+                    )
+                    .clipShape(Capsule())
             }
         }
         .padding(12)
@@ -336,7 +461,12 @@ private struct PersonDetails: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(person.name).font(.headline.weight(.bold)).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
                 Text("Username: \(person.username)").font(.caption2).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
-                Text("Phone number: \(person.phoneNumber)").font(.caption2).foregroundStyle(.white).frame(maxWidth: .infinity, alignment: .leading)
+                Text("Phone number: \(person.phoneNumber)")
+                    .font(.caption2)
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
