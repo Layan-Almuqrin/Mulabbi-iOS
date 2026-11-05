@@ -7,6 +7,7 @@ struct PilgrimMainView: View {
     @State private var selectedTab = 0
     @State private var showCompanionSOSAlert = false
     @State private var showCompanionLocation = false
+    @AppStorage("currentUsername") private var currentUsername = ""
 
     init(onLogout: @escaping () -> Void = {}) {
         self.onLogout = onLogout
@@ -46,13 +47,15 @@ struct PilgrimMainView: View {
                     .tag(3)
             }
 
-            if showCompanionSOSAlert, let companion = companionEmergencyStore.activeSOSRequest {
+            if showCompanionSOSAlert,
+               let companion = companionEmergencyStore.activeSOSRequest,
+               let location = companionEmergencyStore.activeSOSLocation {
                 CompanionSOSRequestCard(
                     companion: companion,
+                    location: location,
                     onOpenLocation: {
                         showCompanionSOSAlert = false
                         showCompanionLocation = true
-                        companionEmergencyStore.clearSOSRequest()
                     },
                     onDismiss: {
                         showCompanionSOSAlert = false
@@ -64,12 +67,26 @@ struct PilgrimMainView: View {
         .tint(Color.mulabbiMaroon)
         .onAppear {
             showCompanionSOSAlert = companionEmergencyStore.activeSOSRequest != nil
+            companionEmergencyStore.startReceivingRequests(
+                for: currentUsername
+            )
         }
         .onChange(of: companionEmergencyStore.activeSOSRequest?.id) { _, requestID in
             showCompanionSOSAlert = requestID != nil
         }
-        .fullScreenCover(isPresented: $showCompanionLocation) {
-            CompanionLocationMapView(isPresented: $showCompanionLocation)
+        /// يفتح خريطة موقع المساعده الحقيقي ثم يمسح بيانات الطلب بعد اغلاق الخريطة
+        .fullScreenCover(
+            isPresented: $showCompanionLocation,
+            onDismiss: {
+                companionEmergencyStore.clearSOSRequest()
+            }
+        ) {
+            if let location = companionEmergencyStore.activeSOSLocation {
+                CompanionLocationMapView(
+                    isPresented: $showCompanionLocation,
+                    location: location
+                )
+            }
         }
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 
 struct ForgotPasswordView: View {
 
@@ -10,6 +11,27 @@ struct ForgotPasswordView: View {
     @State private var code = ""
     @State private var newPassword = ""
     @State private var confirmPassword = ""
+    @State private var errorMessage: String?
+    @State private var isSending = false
+
+    // هنا نرسل رابط إعادة تعيين كلمة المرور للبريد المدخل.
+    private func sendResetLink() {
+        let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !address.isEmpty else {
+            errorMessage = isArabic ? "أدخلي بريدك الإلكتروني" : "Enter your email address"
+            return
+        }
+        isSending = true
+        errorMessage = nil
+        Auth.auth().sendPasswordReset(withEmail: address) { error in
+            isSending = false
+            if let error {
+                errorMessage = error.localizedDescription
+            } else {
+                step = 2
+            }
+        }
+    }
 
     var isArabic: Bool {
         appLanguage == "ar"
@@ -82,10 +104,10 @@ struct ForgotPasswordView: View {
                         .cornerRadius(6)
 
                         Button(action: {
-                            step = 2
+                            sendResetLink()
                         }) {
 
-                            Text("Send Code")
+                            Text(isSending ? "Sending…" : "Send Reset Link")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -100,44 +122,13 @@ struct ForgotPasswordView: View {
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(.black)
 
-                        Text("Please enter the code sent to your email")
+                        Text(isArabic ? "أرسلنا رابط إعادة تعيين كلمة المرور إلى بريدك. افتحيه لإكمال العملية." : "We sent a password reset link to your email. Open it to complete the reset.")
                             .font(.system(size: 11))
                             .foregroundColor(.black)
                             .multilineTextAlignment(.center)
 
-                        HStack {
-
-                            Image(systemName: "number")
-                                .foregroundColor(.gray)
-
-                            textInput(
-                                "Enter your Code",
-                                text: $code,
-                                keyboard: .numberPad
-                            )
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(height: 42)
-                        .background(Color.gray.opacity(0.15))
-                        .cornerRadius(6)
-
-                        HStack {
-
-                            Text("Didn't receive the code?")
-                                .font(.system(size: 9))
-                                .foregroundColor(.gray)
-
-                            Button("Resend Code") {
-                            }
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundColor(Color.mulabbiMaroon)
-                        }
-
-                        Button(action: {
-                            step = 3
-                        }) {
-
-                            Text("Submit")
+                        Button(action: { dismiss() }) {
+                            Text(isArabic ? "العودة لتسجيل الدخول" : "Back to Login")
                                 .font(.system(size: 14, weight: .semibold))
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
@@ -219,6 +210,9 @@ struct ForgotPasswordView: View {
             isArabic ? .rightToLeft : .leftToRight
         )
         .navigationBarBackButtonHidden(true)
+        .alert(isArabic ? "تعذر إرسال الرابط" : "Could not send link", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
+            Button(isArabic ? "حسنًا" : "OK") { errorMessage = nil }
+        } message: { Text(errorMessage ?? "") }
     }
 
     private func textInput(

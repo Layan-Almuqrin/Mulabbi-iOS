@@ -1,4 +1,6 @@
 import SwiftUI
+import FirebaseAuth
+import FirebaseFirestore
 
 struct PilgrimLoginView: View {
 
@@ -8,8 +10,13 @@ struct PilgrimLoginView: View {
     @State private var username = ""
     @State private var password = ""
     @State private var isPasswordVisible = false
+    @State private var showErrors = false
+    @State private var errorMessage: String?
+    @State private var isLoading = false
 
     @AppStorage("appLanguage") private var appLanguage = "en"
+    /// يحتفظ باسم المستخدم الذي سجل دخوله ليستخدمه الهوم والمرافقون
+    @AppStorage("currentUsername") private var currentUsername = ""
 
     init(
         onLogin: @escaping () -> Void = {},
@@ -17,6 +24,116 @@ struct PilgrimLoginView: View {
     ) {
         self.onLogin = onLogin
         self.onBack = onBack
+    }
+
+    private func tr(_ en: String, _ ar: String) -> String {
+        appLanguage == "ar" ? ar : en
+    }
+
+    private var usernameError: String? {
+        username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? tr("Please enter your username", "يرجى إدخال اسم المستخدم")
+            : nil
+    }
+
+    private var passwordError: String? {
+        password.isEmpty
+            ? tr("Please enter your password", "يرجى إدخال كلمة المرور")
+            : nil
+    }
+
+    // هنا نتحقق من حساب الحاج قبل ما ندخله.
+    private func attemptLogin() {
+        showErrors = true
+        errorMessage = nil
+
+        guard usernameError == nil, passwordError == nil else {
+            return
+        }
+
+        isLoading = true
+
+        Task {
+            do {
+                let usernameKey = username
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+
+                let snapshot = try await Firestore.firestore()
+                    .collection("usernames")
+                    .document(usernameKey)
+                    .getDocument()
+
+                guard let data = snapshot.data(),
+                      let email = data["email"] as? String else {
+                    throw LoginError.usernameNotFound
+                }
+
+                guard data["role"] as? String == "pilgrim" else {
+                    throw LoginError.wrongAccountType
+                }
+
+                let result = try await Auth.auth()
+                    .signIn(withEmail: email, password: password)
+
+                guard result.user.isEmailVerified else {
+                    try Auth.auth().signOut()
+                    throw LoginError.emailNotVerified
+                }
+
+                await MainActor.run {
+                    currentUsername = username
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    isLoading = false
+                    onLogin()
+                }
+            } catch {
+                await MainActor.run {
+                    isLoading = false
+                    errorMessage = loginErrorText(for: error)
+                }
+            }
+        }
+    }
+
+    private func loginErrorText(for error: Error) -> String {
+        if let loginError = error as? LoginError {
+            switch loginError {
+            case .usernameNotFound:
+                return tr("Username not found", "اسم المستخدم غير موجود")
+            case .emailNotVerified:
+                return tr(
+                    "Please verify your email before logging in",
+                    "يرجى تأكيد بريدك الإلكتروني قبل تسجيل الدخول"
+                )
+
+            case .wrongAccountType:
+                return tr(
+                    "This account is registered as a paramedic",
+                    "هذا الحساب مسجل كمسعف"
+                )
+            }
+        }
+
+        let code = AuthErrorCode(rawValue: (error as NSError).code)
+        if code == .wrongPassword || code == .userNotFound ||
+            code == .invalidCredential {
+            return tr(
+                "Username or password is incorrect",
+                "اسم المستخدم أو كلمة المرور غير صحيحة"
+            )
+        }
+
+        return tr(
+            "Login failed. Check your connection and try again.",
+            "تعذر تسجيل الدخول. تحققي من الاتصال وحاولي مرة أخرى."
+        )
+    }
+
+    private enum LoginError: Error {
+        case usernameNotFound
+        case emailNotVerified
+        case wrongAccountType
     }
 
     var body: some View {
@@ -29,7 +146,6 @@ struct PilgrimLoginView: View {
                     .ignoresSafeArea()
 
                 VStack {
-
 
                     HStack {
 
@@ -85,73 +201,69 @@ struct PilgrimLoginView: View {
                     .padding(.top, 40)
                     .safeAreaPadding(.top)
 
-
                     Spacer()
 
-
                     VStack(spacing: 12) {
-
 
                         Text("Welcome")
                             .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.black)
 
-
                         Text("Login to your account")
                             .font(.system(size: 15))
                             .foregroundColor(.black)
 
+                        VStack(alignment: .leading, spacing: 4) {
 
-                        HStack {
-                            Image(systemName: "person")
-                                .foregroundColor(.gray)
+                            HStack {
+                                Image(systemName: "person")
+                                    .foregroundColor(.gray)
 
-
-                            textInput(
-                                "Enter your username",
-                                text: $username
-                            )
-
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(height: 46)
-                        .background(Color.gray.opacity(0.15))
-                        .cornerRadius(6)
-
-
-                        HStack {
-                            Image(systemName: "lock")
-                                .foregroundColor(.gray)
-
-
-                            textInput(
-                                "Enter your password",
-                                text: $password,
-                                isSecure: !isPasswordVisible
-                            )
-
-
-                            Button {
-
-                                isPasswordVisible.toggle()
-
-                            } label: {
-
-                                Image(
-                                    systemName: isPasswordVisible
-                                    ? "eye"
-                                    : "eye.slash"
+                                textInput(
+                                    "Enter your username",
+                                    text: $username
                                 )
-                                .foregroundColor(.gray)
-                                .font(.system(size: 16))
                             }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 12)
-                        .frame(height: 46)
-                        .background(Color.gray.opacity(0.15))
-                        .cornerRadius(6)
+                            .padding(.horizontal, 12)
+                            .frame(height: 46)
+                            .background(Color.gray.opacity(0.15))
+                            .cornerRadius(6)
 
+                            errorText(usernameError)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+
+                            HStack {
+                                Image(systemName: "lock")
+                                    .foregroundColor(.gray)
+
+                                textInput(
+                                    "Enter your password",
+                                    text: $password,
+                                    isSecure: !isPasswordVisible
+                                )
+
+                                Button {
+                                    isPasswordVisible.toggle()
+                                } label: {
+                                    Image(
+                                        systemName: isPasswordVisible
+                                            ? "eye"
+                                            : "eye.slash"
+                                    )
+                                    .foregroundColor(.gray)
+                                    .font(.system(size: 16))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding(.horizontal, 12)
+                            .frame(height: 46)
+                            .background(Color.gray.opacity(0.15))
+                            .cornerRadius(6)
+
+                            errorText(passwordError)
+                        }
 
                         NavigationLink(destination: ForgotPasswordView()) {
                             Text("Forgot password?")
@@ -163,22 +275,33 @@ struct PilgrimLoginView: View {
                             alignment: appLanguage == "ar" ? .leading : .trailing
                         )
 
-
-                        Button(action: {
-
-                            onLogin()
-
-                        }) {
-
-                            Text("Login")
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 51)
-                                .background(Color.mulabbiMaroon)
-                                .clipShape(Capsule())
+                        if let errorMessage {
+                            Text(errorMessage)
+                                .font(.system(size: 12))
+                                .foregroundColor(Color.mulabbiMaroon)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
 
+                        Button(action: {
+                            attemptLogin()
+                        }) {
+                            Group {
+                                if isLoading {
+                                    ProgressView()
+                                        .tint(.white)
+                                } else {
+                                    Text("Login")
+                                        .font(.system(size: 17, weight: .semibold))
+                                        .foregroundColor(.white)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 51)
+                            .background(Color.mulabbiMaroon)
+                            .clipShape(Capsule())
+                        }
+                        .disabled(isLoading)
 
                         HStack(spacing: 4) {
 
@@ -186,13 +309,11 @@ struct PilgrimLoginView: View {
                                 .font(.system(size: 13))
                                 .foregroundColor(.black)
 
-
                             NavigationLink(
                                 destination: PilgrimSignUpView(
                                     onSignUp: onLogin
                                 )
                             ) {
-
                                 Text("Sign up")
                                     .font(.system(size: 13, weight: .bold))
                                     .foregroundColor(Color.mulabbiMaroon)
@@ -208,7 +329,6 @@ struct PilgrimLoginView: View {
                         RoundedRectangle(cornerRadius: 20)
                     )
 
-
                     Spacer()
                 }
             }
@@ -220,6 +340,16 @@ struct PilgrimLoginView: View {
         }
     }
 
+    @ViewBuilder
+    private func errorText(_ message: String?) -> some View {
+        if showErrors, let message {
+            Text(message)
+                .font(.system(size: 11))
+                .foregroundColor(Color.mulabbiMaroon)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
 
     private func textInput(
         _ placeholder: LocalizedStringKey,
@@ -250,7 +380,7 @@ struct PilgrimLoginView: View {
     }
 }
 
-
 #Preview {
     PilgrimLoginView()
 }
+

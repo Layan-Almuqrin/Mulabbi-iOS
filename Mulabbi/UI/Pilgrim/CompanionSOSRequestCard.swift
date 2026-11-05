@@ -14,13 +14,10 @@ import MapKit
 
 struct CompanionSOSRequestCard: View {
     let companion: Companion
+    let location: CLLocationCoordinate2D
     let onOpenLocation: () -> Void
     let onDismiss: () -> Void
 
-    private let location = CLLocationCoordinate2D(
-        latitude: 21.4225,
-        longitude: 39.8262
-    )
 
     var body: some View {
         ZStack {
@@ -75,7 +72,7 @@ struct CompanionSOSRequestCard: View {
     }
 
     private var companionRequestTitle: String {
-        String(format: companionLocalized("%@ sent a help\nrequest"), locale: companionAppLocale, companion.name)
+        String(format: companionLocalized("%@ sent a help request"), locale: companionAppLocale, companion.name)
     }
 
     private var companionDetails: String {

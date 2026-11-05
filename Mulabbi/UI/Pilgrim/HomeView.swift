@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import CoreLocation
 
 
 private var appLocale: Locale {
@@ -19,11 +20,11 @@ private enum PendingAction {
 }
 
 private enum HomeAlert: Identifiable {
-    case locationNeeded, confirmSOS, paramedicOnWay, confirmOthers, requestSent, disconnectWatch
-
+    case locationNeeded, confirmSOS, paramedicOnWay, confirmOthers, requestSent, disconnectWatch, outsideServiceArea
     var id: String {
         switch self {
         case .locationNeeded: "locationNeeded"
+        case .outsideServiceArea: "outsideServiceArea"
         case .confirmSOS: "confirmSOS"
         case .paramedicOnWay: "paramedicOnWay"
         case .confirmOthers: "confirmOthers"
@@ -35,6 +36,7 @@ private enum HomeAlert: Identifiable {
     var title: String {
         switch self {
         case .locationNeeded: appLocalized("Location Needed")
+        case .outsideServiceArea: appLocalized("Outside Service Area")
         case .confirmSOS: appLocalized("Are you sure you want to send an SOS?")
         case .paramedicOnWay: appLocalized("A paramedic is on the way to help you.")
         case .confirmOthers: appLocalized("Are you sure you want to send help to another person?")
@@ -47,6 +49,10 @@ private enum HomeAlert: Identifiable {
         switch self {
         case .locationNeeded:
             appLocalized("Please enable your location so we can send help to you.")
+        case .outsideServiceArea:
+            appLocalized(
+                "Emergency requests are available only within the Haram boundary, and the Holy Sites during Dhu al-Hijjah."
+            )
         case .confirmOthers:
             appLocalized("Your phone number and location will be shared with paramedics.")
         case .disconnectWatch:
@@ -60,16 +66,29 @@ private enum HomeAlert: Identifiable {
 
 struct HomeView: View {
     @AppStorage("appLanguage") private var appLanguage = "en"
+    @AppStorage("currentUsername") private var currentUsername = ""
+    @AppStorage("heartRateMonitoringEnabled") private var isWatchConnected = false
+
     @StateObject private var locationManager = LocationManager()
+    @StateObject private var heartRateMonitor = HeartRateMonitor.shared
+    @StateObject private var settingsStore = PilgrimSettingsStore()
+
+    /// عند إرسال طلب مساعدة يحفظ الطلب والموقع في قاعدة البيانات
+    private let emergencyAlertFirebase = EmergencyAlertFirebase()
+
+    /// يصل إلى بيانات المرافقين المفعّلين عند إرسال طلب الطوارئ
+    private let companionFirebase = CompanionFirebase()
+
+    /// يتحقق من أن موقع المستخدم داخل حدود الخدمة قبل إرسال طلب الطوارئ
+    private let allowedAreaValidator = AllowedAreaValidator()
     @ObservedObject var emergencyStore: CompanionEmergencyStore
 
     @State private var pendingAction: PendingAction?
     @State private var activeAlert: HomeAlert?
     @State private var showRequestDetailsSheet = false
     @State private var requestDetails = ""
-    @State private var isWatchConnected = false
-    @State private var showHeartRateAlert = false
     @State private var isSOSPulsing = false
+    @State private var requestForOthersLocation: CLLocationCoordinate2D?
     private let userName = "Shatha"
 
     var body: some View {
@@ -112,22 +131,19 @@ struct HomeView: View {
                     .zIndex(4)
                 }
 
-                if showHeartRateAlert {
-                    HeartRateSystemAlert {
-                        showHeartRateAlert = false
+                if let reading = heartRateMonitor.alertReading {
+                    HeartRateSystemAlert(reading: reading) {
+                        heartRateMonitor.dismissAlert()
                     }
                     .zIndex(5)
                 }
 
             }
         }
+        /// يعرض صفحة كتابة وصف الحالة عند طلب المساعدة لشخص اخر.
         .sheet(isPresented: $showRequestDetailsSheet) {
             RequestForOthersDetailsView(details: $requestDetails) {
-                showRequestDetailsSheet = false
-                requestDetails = ""
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    activeAlert = .requestSent
-                }
+                sendRequestForOthers()
             }
             .presentationDetents([.large])
             .presentationDragIndicator(.visible)
@@ -267,8 +283,14 @@ struct HomeView: View {
                     if isWatchConnected {
                         activeAlert = .disconnectWatch
                     } else {
-                        isWatchConnected = true
-                        showAutomaticHeartRateAlert()
+                        Task {
+                            do {
+                                let age = try await settingsStore.fetchAge()
+                                try await heartRateMonitor.connect(age: age)
+                            } catch {
+                                print("Unable to connect heart-rate monitoring: \(error)")
+                            }
+                        }
                     }
                 } label: {
                     Text(appLocalized(isWatchConnected ? "Disconnect" : "Connect"))
@@ -287,13 +309,6 @@ struct HomeView: View {
         }
     }
 
-    private func showAutomaticHeartRateAlert() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            guard isWatchConnected else { return }
-            showHeartRateAlert = true
-        }
-    }
-
     private func configureLocationCallbacks() {
         locationManager.onAuthorized = {
             handleAuthorized()
@@ -301,6 +316,67 @@ struct HomeView: View {
 
         locationManager.onDenied = {
             handleDenied()
+        }
+        /// يستلم احداثيات موقع المستخدم بعد وصولها من LocationManager
+        locationManager.onLocationReceived = {
+            /// عند وصول موقع المستخدم ينشئ طلب طوارئ جديد لحفظ بيانات الطلب وموقعه في قاعدة البيانات
+            coordinate in
+            let isLocationAllowed = allowedAreaValidator.isLocationAllowed(coordinate)
+
+            guard isLocationAllowed else {
+                DispatchQueue.main.async {
+                    activeAlert = .outsideServiceArea
+                }
+                return
+            }
+            
+            if pendingAction == .requestForOthers {
+                DispatchQueue.main.async {
+                    requestForOthersLocation = coordinate
+                    showRequestDetailsSheet = true
+                }
+                return
+            }
+
+            emergencyAlertFirebase.createEmergencyAlert(
+                pilgrimUsername: currentUsername,
+                description: ""
+            ){ result in
+                /// بعد حفظ طلب الطوارئ  يحفظ موقع المستخدم المرتبط به في قاعدة البيانات
+                switch result {
+            case .success(let alertId):
+                    /// يضيف الى طلب الطوارئ اسماء المرافقين المقبولين الذين تنبيهاتهم مفعله
+                    companionFirebase.fetchEnabledCompanions(
+                        for: currentUsername
+                    ) { result in
+                        if case .success(let companions) = result {
+                            emergencyAlertFirebase.saveCompanionRecipients(
+                                alertId: alertId,
+                                companionUsernames: companions.map { $0.username }
+                            )
+                        }
+                    }
+                emergencyAlertFirebase.saveLocation(
+                    alertId: alertId,
+                    pilgrimUsername: currentUsername,
+                    latitude: coordinate.latitude,
+                    longitude: coordinate.longitude
+          ///ينتظر قبول المسعف للطلب ثم يظهر تنبيه ان المسعف في الطريق
+                    ){ locationResult in
+                    if case .success = locationResult {
+                        emergencyAlertFirebase.observeAlertStatus(alertId: alertId) { status in
+                            if status == "accepted" {
+                                DispatchQueue.main.async {
+                                    activeAlert = .paramedicOnWay
+                                }
+                            }
+                        }
+                    }
+                }
+            case .failure:
+                break
+            }
+            }
         }
     }
 
@@ -315,12 +391,13 @@ struct HomeView: View {
             continueAfterLocationCheck()
         case .confirmSOS:
             dispatchParamedic()
-        case .paramedicOnWay, .requestSent:
+        case .paramedicOnWay, .requestSent, .outsideServiceArea:
             dismissHomeAlert()
         case .confirmOthers:
-            showRequestDetailsSheet = true
+            activeAlert = nil
+            locationManager.requestCurrentLocation()
         case .disconnectWatch:
-            isWatchConnected = false
+            heartRateMonitor.disconnect()
             dismissHomeAlert()
         }
     }
@@ -348,11 +425,10 @@ struct HomeView: View {
         activeAlert = .locationNeeded
     }
 
+    /// ياخذ احداثيات موقع المستخدم مرة واحدة بعد تاكيد ارسال طلب الطوارئ
     private func dispatchParamedic() {
         activeAlert = nil
-        DispatchQueue.main.async {
-            activeAlert = .paramedicOnWay
-        }
+        locationManager.requestCurrentLocation()
     }
 
     private func continueAfterLocationCheck() {
@@ -365,6 +441,42 @@ struct HomeView: View {
 
         case .none:
             break
+        }
+    }
+    /// يحفظ طلب المساعدة لشخص آخر مع الوصف والموقع الذي تم التحقق منه.
+    private func sendRequestForOthers() {
+        guard let coordinate = requestForOthersLocation else {
+            activeAlert = .locationNeeded
+            return
+        }
+
+        emergencyAlertFirebase.createEmergencyAlert(
+            pilgrimUsername: currentUsername,
+            description: requestDetails,
+            isRequestForOther: true
+        ) { result in
+            switch result {
+            case .success(let alertId):
+                emergencyAlertFirebase.saveLocation(
+                    alertId: alertId,
+                    pilgrimUsername: currentUsername,
+                    latitude: coordinate.latitude,
+                    longitude: coordinate.longitude
+                ) { locationResult in
+                    if case .success = locationResult {
+                        DispatchQueue.main.async {
+                            showRequestDetailsSheet = false
+                            requestDetails = ""
+                            requestForOthersLocation = nil
+                            pendingAction = nil
+                            activeAlert = .requestSent
+                        }
+                    }
+                }
+
+            case .failure:
+                break
+            }
         }
     }
 }
@@ -415,7 +527,7 @@ private struct HomeAlertOverlay: View {
         switch alert {
         case .locationNeeded: appLocalized("Allow")
         case .confirmSOS: appLocalized("Send")
-        case .paramedicOnWay, .requestSent: appLocalized("OK")
+        case .paramedicOnWay, .requestSent, .outsideServiceArea: appLocalized("OK")
         case .confirmOthers: appLocalized("Yes")
         case .disconnectWatch: appLocalized("Disconnect")
         }
@@ -425,8 +537,7 @@ private struct HomeAlertOverlay: View {
         switch alert {
         case .locationNeeded: appLocalized("Don't Allow")
         case .confirmSOS, .confirmOthers, .disconnectWatch: appLocalized("Cancel")
-        case .paramedicOnWay, .requestSent: nil
-        }
+        case .paramedicOnWay, .requestSent, .outsideServiceArea: nil        }
     }
 
     private func alertButton(_ title: String, action: @escaping () -> Void) -> some View {
@@ -444,6 +555,7 @@ private struct HomeAlertOverlay: View {
 
 private struct HeartRateSystemAlert: View {
     @AppStorage("appLanguage") private var appLanguage = "en"
+    let reading: HeartRateReading
     let dismiss: () -> Void
 
     var body: some View {
@@ -452,11 +564,16 @@ private struct HeartRateSystemAlert: View {
                 .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 16) {
-                Text("High Heart Rate Detected")
+                Text(appLocalized(titleKey))
                     .font(.system(size: appLanguage == "ar" ? 20 : 22, weight: .bold))
                     .frame(maxWidth: .infinity, alignment: .center)
 
-                Text("Current: 155 bpm")
+                Text(
+                    String(
+                        format: appLocalized("Current: %@ bpm"),
+                        String(reading.bpm)
+                    )
+                )
                     .font(.system(size: appLanguage == "ar" ? 17 : 19))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -496,6 +613,17 @@ private struct HeartRateSystemAlert: View {
             .padding(.horizontal, 24)
         }
     }
+
+    private var titleKey: String {
+        switch reading.state {
+        case .high:
+            "High Heart Rate Detected"
+        case .low:
+            "Low Heart Rate Detected"
+        case .normal:
+            ""
+        }
+    }
 }
 
 private struct RequestForOthersDetailsView: View {
@@ -505,19 +633,19 @@ private struct RequestForOthersDetailsView: View {
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: appLanguage == "ar" ? .trailing : .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 18) {
                 Text("Emergency Description")
                     .font(.title2.weight(.bold))
                     .frame(maxWidth: .infinity, alignment: .center)
 
                 Text("Describe the Situation")
                     .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: appLanguage == "ar" ? .trailing : .leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                ZStack(alignment: appLanguage == "ar" ? .topTrailing : .topLeading) {
+                ZStack(alignment: .topLeading) {
                     TextEditor(text: $details)
                         .font(.body)
-                        .multilineTextAlignment(appLanguage == "ar" ? .trailing : .leading)
+                        .multilineTextAlignment(.leading)
                         .environment(\.layoutDirection, appLanguage == "ar" ? .rightToLeft : .leftToRight)
                         .scrollContentBackground(.hidden)
                         .padding(8)
@@ -528,7 +656,7 @@ private struct RequestForOthersDetailsView: View {
                         Text("Describe what happened in detail...")
                             .foregroundStyle(.secondary)
                             .padding(.top, 18)
-                            .padding(appLanguage == "ar" ? .trailing : .leading, 16)
+                            .padding(.leading, 16)
                             .allowsHitTesting(false)
                     }
                 }
@@ -551,7 +679,9 @@ private struct RequestForOthersDetailsView: View {
             .padding(24)
             .background(Color(.systemGroupedBackground))
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
+                ToolbarItem(
+                    placement: appLanguage == "ar" ? .topBarLeading : .topBarTrailing
+                ) {
                     Button {
                         dismiss()
                     } label: {
