@@ -109,7 +109,6 @@ struct EditMedicalRecordView: View {
         if draft.chronicDiseases.isBlank { invalid.insert(.chronicDiseases) }
         if draft.medications.isBlank { invalid.insert(.medications) }
         if draft.allergies.isBlank { invalid.insert(.allergies) }
-        if draft.otherInfo.isBlank { invalid.insert(.otherInfo) }
 
         invalidFields = invalid
 
@@ -119,8 +118,7 @@ struct EditMedicalRecordView: View {
                 .gender,
                 .chronicDiseases,
                 .medications,
-                .allergies,
-                .otherInfo
+                .allergies
             ]
 
             if let firstInvalidField = fieldOrder.first(where: invalid.contains) {

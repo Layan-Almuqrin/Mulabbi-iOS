@@ -67,11 +67,18 @@ private enum HomeAlert: Identifiable {
 struct HomeView: View {
     @AppStorage("appLanguage") private var appLanguage = "en"
     @AppStorage("currentUsername") private var currentUsername = ""
+    @AppStorage("heartRateMonitoringEnabled") private var isWatchConnected = false
+
     @StateObject private var locationManager = LocationManager()
-    ///عند ارسال طلب مساعده يحفظ الطلبات والموقع في الداتابيس
+    @StateObject private var heartRateMonitor = HeartRateMonitor.shared
+    @StateObject private var settingsStore = PilgrimSettingsStore()
+
+    /// عند إرسال طلب مساعدة يحفظ الطلب والموقع في قاعدة البيانات
     private let emergencyAlertFirebase = EmergencyAlertFirebase()
-    /// يصل الى بيانات المرافقين المفعلين عند ارسال طلب الطوارئ
+
+    /// يصل إلى بيانات المرافقين المفعّلين عند إرسال طلب الطوارئ
     private let companionFirebase = CompanionFirebase()
+
     /// يتحقق من أن موقع المستخدم داخل حدود الخدمة قبل إرسال طلب الطوارئ
     private let allowedAreaValidator = AllowedAreaValidator()
     @ObservedObject var emergencyStore: CompanionEmergencyStore
@@ -80,8 +87,6 @@ struct HomeView: View {
     @State private var activeAlert: HomeAlert?
     @State private var showRequestDetailsSheet = false
     @State private var requestDetails = ""
-    @State private var isWatchConnected = false
-    @State private var showHeartRateAlert = false
     @State private var isSOSPulsing = false
     @State private var requestForOthersLocation: CLLocationCoordinate2D?
     private let userName = "Shatha"
@@ -126,9 +131,9 @@ struct HomeView: View {
                     .zIndex(4)
                 }
 
-                if showHeartRateAlert {
-                    HeartRateSystemAlert {
-                        showHeartRateAlert = false
+                if let reading = heartRateMonitor.alertReading {
+                    HeartRateSystemAlert(reading: reading) {
+                        heartRateMonitor.dismissAlert()
                     }
                     .zIndex(5)
                 }
@@ -278,8 +283,14 @@ struct HomeView: View {
                     if isWatchConnected {
                         activeAlert = .disconnectWatch
                     } else {
-                        isWatchConnected = true
-                        showAutomaticHeartRateAlert()
+                        Task {
+                            do {
+                                let age = try await settingsStore.fetchAge()
+                                try await heartRateMonitor.connect(age: age)
+                            } catch {
+                                print("Unable to connect heart-rate monitoring: \(error)")
+                            }
+                        }
                     }
                 } label: {
                     Text(appLocalized(isWatchConnected ? "Disconnect" : "Connect"))
@@ -295,13 +306,6 @@ struct HomeView: View {
             .background(Color.mulabbiRoseTint)
             .clipShape(RoundedRectangle(cornerRadius: 18))
 
-        }
-    }
-
-    private func showAutomaticHeartRateAlert() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
-            guard isWatchConnected else { return }
-            showHeartRateAlert = true
         }
     }
 
@@ -393,7 +397,7 @@ struct HomeView: View {
             activeAlert = nil
             locationManager.requestCurrentLocation()
         case .disconnectWatch:
-            isWatchConnected = false
+            heartRateMonitor.disconnect()
             dismissHomeAlert()
         }
     }
@@ -551,6 +555,7 @@ private struct HomeAlertOverlay: View {
 
 private struct HeartRateSystemAlert: View {
     @AppStorage("appLanguage") private var appLanguage = "en"
+    let reading: HeartRateReading
     let dismiss: () -> Void
 
     var body: some View {
@@ -559,11 +564,16 @@ private struct HeartRateSystemAlert: View {
                 .ignoresSafeArea()
 
             VStack(alignment: .leading, spacing: 16) {
-                Text("High Heart Rate Detected")
+                Text(appLocalized(titleKey))
                     .font(.system(size: appLanguage == "ar" ? 20 : 22, weight: .bold))
                     .frame(maxWidth: .infinity, alignment: .center)
 
-                Text("Current: 155 bpm")
+                Text(
+                    String(
+                        format: appLocalized("Current: %@ bpm"),
+                        String(reading.bpm)
+                    )
+                )
                     .font(.system(size: appLanguage == "ar" ? 17 : 19))
                     .foregroundStyle(.secondary)
                     .frame(maxWidth: .infinity, alignment: .center)
@@ -601,6 +611,17 @@ private struct HeartRateSystemAlert: View {
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
             .shadow(color: .black.opacity(0.18), radius: 20, y: 8)
             .padding(.horizontal, 24)
+        }
+    }
+
+    private var titleKey: String {
+        switch reading.state {
+        case .high:
+            "High Heart Rate Detected"
+        case .low:
+            "Low Heart Rate Detected"
+        case .normal:
+            ""
         }
     }
 }

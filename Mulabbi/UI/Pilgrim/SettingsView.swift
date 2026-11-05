@@ -19,19 +19,19 @@ struct ProfileData {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    static let sample = ProfileData(
-        username: "Shatha77m",
-        age: "20",
-        firstName: "Shatha",
-        lastName: "Alessa",
-        password: "Shatha12345",
-        email: "Shatal@gmail.com",
+    static let empty = ProfileData(
+        username: "",
+        age: "",
+        firstName: "",
+        lastName: "",
+        password: "",
+        email: "",
         phoneCountryRegion: "SA",
         phoneCountryCode: "+966",
-        phoneNumber: "556786799",
-        phoneE164: "+966556786799",
-        nationality: "Saudi",
-        languages: ["English"]
+        phoneNumber: "",
+        phoneE164: "",
+        nationality: "",
+        languages: []
     )
 }
 
@@ -43,13 +43,13 @@ struct MedicalRecordData {
     var allergies: String
     var otherInfo: String
 
-    static let sample = MedicalRecordData(
-        bloodType: "O+",
-        gender: "Female",
-        chronicDiseases: "None",
-        medications: "None",
-        allergies: "None",
-        otherInfo: "None"
+    static let empty = MedicalRecordData(
+        bloodType: "",
+        gender: "",
+        chronicDiseases: "",
+        medications: "",
+        allergies: "",
+        otherInfo: ""
     )
 }
 
@@ -431,8 +431,10 @@ struct SettingsView: View {
     let onLogout: () -> Void
 
     @State private var route: SettingsRoute = .overview
-    @State private var profile = ProfileData.sample
-    @State private var medicalRecord = MedicalRecordData.sample
+    @State private var profile = ProfileData.empty
+    @State private var medicalRecord = MedicalRecordData.empty
+    @StateObject private var settingsStore = PilgrimSettingsStore()
+    @State private var settingsError: String?
 
     init(
         isEditing: Binding<Bool> = .constant(false),
@@ -464,7 +466,7 @@ struct SettingsView: View {
                     profile: profile,
                     onBack: closeEditor,
                     onSave: { updatedProfile in
-                        profile = updatedProfile
+                        saveProfile(updatedProfile)
                     }
                 )
 
@@ -473,11 +475,122 @@ struct SettingsView: View {
                     medicalRecord: medicalRecord,
                     onBack: closeEditor,
                     onSave: { updatedRecord in
-                        medicalRecord = updatedRecord
+                        saveMedicalRecord(updatedRecord)
                     }
                 )
             }
         }
+        .task {
+            await fetchSettings()
+        }
+        .alert("Settings", isPresented: isShowingSettingsError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(settingsError ?? "")
+        }
+    }
+
+    private func fetchSettings() async {
+        await settingsStore.fetch()
+        guard settingsStore.errorMessage == nil else {
+            settingsError = settingsStore.errorMessage
+            return
+        }
+
+        let storedProfile = settingsStore.profile
+        let phone = splitSaudiPhone(storedProfile.phoneNumber)
+        profile = ProfileData(
+            username: storedProfile.username,
+            age: String(storedProfile.age),
+            firstName: storedProfile.firstName,
+            lastName: storedProfile.lastName,
+            password: "",
+            email: storedProfile.email,
+            phoneCountryRegion: "SA",
+            phoneCountryCode: "+966",
+            phoneNumber: phone,
+            phoneE164: storedProfile.phoneNumber,
+            nationality: storedProfile.nationality,
+            languages: Set(storedProfile.languages)
+        )
+
+        let storedMedicalRecord = settingsStore.medicalRecord
+        medicalRecord = MedicalRecordData(
+            bloodType: storedMedicalRecord.bloodType,
+            gender: storedMedicalRecord.gender,
+            chronicDiseases: storedMedicalRecord.chronicDiseases,
+            medications: storedMedicalRecord.medications,
+            allergies: storedMedicalRecord.allergies,
+            otherInfo: storedMedicalRecord.otherInfo
+        )
+    }
+
+    private func saveProfile(_ updatedProfile: ProfileData) {
+        let previousAge = settingsStore.profile.age
+        let updatedAge = Int(updatedProfile.age) ?? 0
+
+        settingsStore.profile = PilgrimProfileSettings(
+            username: updatedProfile.username,
+            age: updatedAge,
+            firstName: updatedProfile.firstName,
+            lastName: updatedProfile.lastName,
+            email: updatedProfile.email,
+            phoneNumber: updatedProfile.phoneE164.isBlank
+                ? updatedProfile.phoneCountryCode + updatedProfile.phoneNumber
+                : updatedProfile.phoneE164,
+            nationality: updatedProfile.nationality,
+            languages: updatedProfile.languages.sorted()
+        )
+
+        Task {
+            if await settingsStore.saveProfile(newPassword: updatedProfile.password) {
+                if previousAge != updatedAge,
+                   UserDefaults.standard.bool(forKey: "heartRateMonitoringEnabled") {
+                    HeartRateMonitor.shared.updateAge(updatedAge)
+                }
+
+                var savedProfile = updatedProfile
+                savedProfile.password = ""
+                profile = savedProfile
+                closeEditor()
+            } else {
+                settingsError = settingsStore.errorMessage
+            }
+        }
+    }
+
+    private func saveMedicalRecord(_ updatedRecord: MedicalRecordData) {
+        settingsStore.medicalRecord = PilgrimMedicalSettings(
+            bloodType: updatedRecord.bloodType,
+            gender: updatedRecord.gender,
+            chronicDiseases: updatedRecord.chronicDiseases,
+            medications: updatedRecord.medications,
+            allergies: updatedRecord.allergies,
+            otherInfo: updatedRecord.otherInfo
+        )
+
+        Task {
+            if await settingsStore.saveMedicalRecord() {
+                medicalRecord = updatedRecord
+                closeEditor()
+            } else {
+                settingsError = settingsStore.errorMessage
+            }
+        }
+    }
+
+    private func splitSaudiPhone(_ value: String) -> String {
+        var digits = value.filter(\.isNumber)
+        if digits.hasPrefix("966") { digits.removeFirst(3) }
+        if digits.hasPrefix("0") { digits.removeFirst() }
+        return digits
+    }
+
+    private var isShowingSettingsError: Binding<Bool> {
+        Binding(
+            get: { settingsError != nil },
+            set: { if !$0 { settingsError = nil } }
+        )
     }
 
     private func open(_ destination: SettingsRoute) {

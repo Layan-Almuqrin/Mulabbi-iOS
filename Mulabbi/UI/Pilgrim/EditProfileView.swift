@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 
 struct EditProfileView: View {
     let onBack: () -> Void
@@ -282,7 +283,7 @@ struct EditProfileView: View {
     private func validateAndSave(using proxy: ScrollViewProxy) {
         var invalid: Set<ProfileField> = []
 
-        if draft.username.isBlank { invalid.insert(.username) }
+        if !draft.username.isValidSignupUsername { invalid.insert(.username) }
         if draft.age.isBlank {
             invalid.insert(.age)
         } else if !draft.age.isValidAge {
@@ -290,8 +291,14 @@ struct EditProfileView: View {
         }
         if draft.firstName.isBlank { invalid.insert(.firstName) }
         if draft.lastName.isBlank { invalid.insert(.lastName) }
-        if draft.password.isBlank { invalid.insert(.password) }
-        if confirmPassword.isBlank || confirmPassword != draft.password {
+        if !draft.password.isBlank {
+            if !draft.password.isValidSignupPassword {
+                invalid.insert(.password)
+            }
+            if confirmPassword != draft.password {
+                invalid.insert(.confirmPassword)
+            }
+        } else if !confirmPassword.isBlank {
             invalid.insert(.confirmPassword)
         }
         if draft.email.isBlank {
@@ -354,8 +361,6 @@ struct EditProfileView: View {
             || draft.age.isBlank
             || draft.firstName.isBlank
             || draft.lastName.isBlank
-            || draft.password.isBlank
-            || confirmPassword.isBlank
             || draft.email.isBlank
             || draft.phoneNumber.isBlank
             || draft.nationality.isBlank
@@ -393,7 +398,24 @@ extension String {
 
     var isValidAge: Bool {
         guard let value = Int(self) else { return false }
-        return (1...130).contains(value)
+        return value >= 15
+    }
+
+    var isValidSignupUsername: Bool {
+        (4...20).contains(count)
+            && !contains(where: \.isWhitespace)
+            && allSatisfy { character in
+                character == "_"
+                    || (character.isASCII && (character.isLetter || character.isNumber))
+            }
+            && contains { $0.isASCII && $0.isLetter }
+            && contains { $0.isASCII && $0.isNumber }
+    }
+
+    var isValidSignupPassword: Bool {
+        count >= 8
+            && contains { $0.isASCII && $0.isUppercase }
+            && contains { $0.isASCII && $0.isNumber }
     }
 }
 
@@ -402,70 +424,80 @@ struct EmailVerificationView: View {
     let onClose: () -> Void
     let onVerified: () -> Void
 
-    @State private var verificationCode = ""
-    @State private var error: VerificationCodeError?
-    @State private var didResendCode = false
-    @FocusState private var isCodeFocused: Bool
+    @State private var message: String?
+    @State private var isChecking = false
+    @State private var isSending = false
+    @State private var didSendInitialLink = false
+    @AppStorage("appLanguage") private var appLanguage = "en"
 
-    private let demoCode = "123456"
+    private var isArabic: Bool { appLanguage == "ar" }
+    private func tr(_ en: String, _ ar: String) -> String { isArabic ? ar : en }
 
     var body: some View {
         ZStack {
             Color.black.opacity(0.28)
                 .ignoresSafeArea()
-                .onTapGesture {
-                    isCodeFocused = false
-                }
 
-            VStack(spacing: 0) {
+            VStack(spacing: 12) {
                 closeButton
 
-                Text("Verify Your Email")
+                Image(systemName: "envelope.badge")
+                    .font(.system(size: 38))
+                    .foregroundStyle(AppColors.brandRed)
+
+                Text(tr("Verify Your Email", "تأكيد البريد الإلكتروني"))
                     .font(.system(size: 27, weight: .bold))
 
-                Text("A verification code has been sent to your email")
+                Text(tr(
+                    "We sent a verification link to your new email",
+                    "أرسلنا رابط تحقق إلى بريدك الجديد"
+                ))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.gray.opacity(0.72))
+                    .multilineTextAlignment(.center)
                     .padding(.top, 2)
 
                 Text(email)
                     .font(.system(size: 15))
                     .padding(.top, 1)
 
-                verificationField
-                    .padding(.top, 20)
+                if let message {
+                    Text(message)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(AppColors.brandRed)
+                        .multilineTextAlignment(.center)
+                }
 
-                HStack(spacing: 4) {
-                    Text("Didn't receive the code?")
-                        .foregroundStyle(.black)
-
-                    Button("Resend Code") {
-                        verificationCode = ""
-                        error = nil
-                        didResendCode = true
-                        isCodeFocused = true
+                Button {
+                    checkVerification()
+                } label: {
+                    Group {
+                        if isChecking {
+                            ProgressView().tint(.white)
+                        } else {
+                            Text(tr("I verified my email", "تحققت من بريدي"))
+                                .font(.system(size: 17, weight: .bold))
+                        }
                     }
-                    .foregroundStyle(.blue)
-                }
-                .font(.system(size: 12))
-                .padding(.top, 8)
-
-                if didResendCode {
-                    Text("A new code was sent")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.green)
-                        .padding(.top, 5)
-                }
-
-                Button(action: verify) {
-                    Text("Verify")
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 138, height: 42)
-                        .background(AppColors.brandRed, in: Capsule())
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+                    .background(AppColors.brandRed, in: Capsule())
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 24)
+                .disabled(isChecking || isSending)
+
+                Button {
+                    sendVerificationLink()
+                } label: {
+                    Text(isSending
+                         ? tr("Sending…", "جارٍ الإرسال…")
+                         : tr("Resend verification link", "إعادة إرسال رابط التحقق"))
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(AppColors.brandRed)
+                }
+                .buttonStyle(.plain)
+                .disabled(isChecking || isSending)
 
                 Spacer(minLength: 20)
             }
@@ -476,9 +508,10 @@ struct EmailVerificationView: View {
             .padding(.horizontal, 26)
             .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
         }
-        .onAppear {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                isCodeFocused = true
+        .task {
+            if !didSendInitialLink {
+                didSendInitialLink = true
+                await sendVerificationLinkAsync()
             }
         }
     }
@@ -499,70 +532,53 @@ struct EmailVerificationView: View {
         .padding(.trailing, -14)
     }
 
-    private var verificationField: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("*Verification Code")
-                    .font(.system(size: 17, weight: .bold))
+    private func sendVerificationLink() {
+        Task { await sendVerificationLinkAsync() }
+    }
 
-                Spacer()
+    private func sendVerificationLinkAsync() async {
+        guard let user = Auth.auth().currentUser else {
+            message = tr("Please log in again.", "يرجى تسجيل الدخول مرة أخرى.")
+            return
+        }
 
-                if let error {
-                    Text(LocalizedStringKey(error.message))
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppColors.brandRed)
-                }
+        isSending = true
+        defer { isSending = false }
+
+        do {
+            try await user.sendEmailVerification(beforeUpdatingEmail: email)
+            message = tr(
+                "Verification link sent. Open it, then return here.",
+                "تم إرسال رابط التحقق. افتحيه ثم عودي هنا."
+            )
+        } catch {
+            message = error.localizedDescription
+        }
+    }
+
+    private func checkVerification() {
+        Task {
+            guard let user = Auth.auth().currentUser else {
+                message = tr("Please log in again.", "يرجى تسجيل الدخول مرة أخرى.")
+                return
             }
 
-            TextField("Enter verification code", text: $verificationCode)
-                .font(.system(size: 17))
-                .keyboardType(.numberPad)
-                .focused($isCodeFocused)
-                .padding(.horizontal, 14)
-                .frame(height: 52)
-                .background(
-                    error == nil
-                        ? Color(red: 0.86, green: 0.86, blue: 0.87)
-                        : AppColors.brandRed.opacity(0.28),
-                    in: RoundedRectangle(cornerRadius: 6)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(
-                            error == nil ? Color.clear : AppColors.brandRed,
-                            lineWidth: 1
-                        )
+            isChecking = true
+            defer { isChecking = false }
+
+            do {
+                try await user.reload()
+                if Auth.auth().currentUser?.email?.normalizedEmail == email.normalizedEmail {
+                    onVerified()
+                } else {
+                    message = tr(
+                        "Email is not verified yet. Open the link first.",
+                        "لم يتم تأكيد البريد بعد. افتحي الرابط أولًا."
+                    )
                 }
-                .onChange(of: verificationCode) { _, newValue in
-                    verificationCode = String(newValue.filter(\.isNumber).prefix(6))
-                    error = nil
-                    didResendCode = false
-                }
-        }
-    }
-
-    private func verify() {
-        if verificationCode.isEmpty {
-            error = .required
-        } else if verificationCode != demoCode {
-            error = .incorrect
-        } else {
-            isCodeFocused = false
-            onVerified()
-        }
-    }
-}
-
-private enum VerificationCodeError {
-    case required
-    case incorrect
-
-    var message: String {
-        switch self {
-        case .required:
-            return "Code is required"
-        case .incorrect:
-            return "Incorrect code"
+            } catch {
+                message = error.localizedDescription
+            }
         }
     }
 }
