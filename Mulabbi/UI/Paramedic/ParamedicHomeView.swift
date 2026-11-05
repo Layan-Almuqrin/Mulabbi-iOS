@@ -72,7 +72,7 @@ struct ParamedicHomeView: View {
                             
                             switch location.type {
                                 
-                           
+                                
                                 
                             case .patient(let patient):
                                 
@@ -86,7 +86,6 @@ struct ParamedicHomeView: View {
                                 )
                                 
                                 
-                           
                                 
                             case .companion(let report):
                                 
@@ -129,7 +128,7 @@ struct ParamedicHomeView: View {
             .ignoresSafeArea()
             
             
-           
+            
             
             VStack {
                 
@@ -162,7 +161,7 @@ struct ParamedicHomeView: View {
                             )
                         
                         
-                        Text("Welcome Fahad !")
+                        Text("Welcome \(emergencyStore.currentParamedicUsername) !")
                             .font(
                                 .system(
                                     size: 23,
@@ -188,6 +187,9 @@ struct ParamedicHomeView: View {
             .hidden,
             for: .navigationBar
         )
+        .task {
+            await emergencyStore.loadEmergencies()
+        }
     }
 }
 
@@ -198,9 +200,23 @@ struct EmergencyLocation: Identifiable {
     
     let id = UUID()
     
+    let alertID: Int?
+    
     let coordinate: CLLocationCoordinate2D
     
     let type: EmergencyType
+    
+    
+    init(
+        alertID: Int? = nil,
+        coordinate: CLLocationCoordinate2D,
+        type: EmergencyType
+    ) {
+        
+        self.alertID = alertID
+        self.coordinate = coordinate
+        self.type = type
+    }
 }
 
 

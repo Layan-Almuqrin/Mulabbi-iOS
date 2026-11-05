@@ -18,7 +18,7 @@ struct ParamedicSettingsView: View {
     
     @State private var goToCaseHistory = false
     @State private var route: ParamedicSettingsRoute = .overview
-    @State private var paramedicProfile = ParamedicProfileData.sample
+    @State private var paramedicProfile: ParamedicProfileData
     
     
   
@@ -32,6 +32,11 @@ struct ParamedicSettingsView: View {
             wrappedValue: emergencyStore
         )
         self.onLogout = onLogout
+        _paramedicProfile = State(initialValue: ParamedicProfileData(
+            username: emergencyStore.currentParamedicUsername,
+            age: "", firstName: "", lastName: "", password: "", email: "",
+            certificateFileName: ""
+        ))
     }
     
     
@@ -85,7 +90,7 @@ struct ParamedicSettingsView: View {
                 
                
                 
-                Text("Fahad Aldosari")
+                Text(emergencyStore.currentParamedicUsername)
                     .font(
                         .system(
                             size: 30,
@@ -316,7 +321,7 @@ struct ParamedicSettingsView: View {
             switch route {
             case .overview:
                 SettingsMainView(
-                    fullName: paramedicProfile.fullName,
+                    fullName: paramedicProfile.fullName.isEmpty ? emergencyStore.currentParamedicUsername : paramedicProfile.fullName,
                     onEditProfile: { route = .profile },
                     onEditMedicalRecord: { route = .caseHistory },
                     onLogout: onLogout,

@@ -335,6 +335,10 @@ struct EmergencyDetailsView: View {
                     
                     Button {
                         
+                        emergencyStore.acceptEmergency(
+                            emergencyID: emergencyID
+                        )
+                        
                         goToActiveEmergency = true
                         
                     } label: {

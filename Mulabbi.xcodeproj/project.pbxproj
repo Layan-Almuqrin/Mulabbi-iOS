@@ -17,9 +17,22 @@
 		9F9910693057A3F100CBCBEB /* Mulabbi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Mulabbi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5D465B80309C7068003E1A16 /* Exceptions for "Mulabbi" folder in "Mulabbi" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Backend/Paramedic/FirestoreCollections.swift,
+			);
+			target = 9F9910683057A3F100CBCBEB /* Mulabbi */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		9F99106B3057A3F100CBCBEB /* Mulabbi */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5D465B80309C7068003E1A16 /* Exceptions for "Mulabbi" folder in "Mulabbi" target */,
+			);
 			path = Mulabbi;
 			sourceTree = "<group>";
 		};

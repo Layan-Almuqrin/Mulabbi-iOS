@@ -245,7 +245,7 @@ struct EmergencyDescriptionView: View {
                                 )
                             
                             
-                            Text("Welcome Fahad !")
+                            Text("Welcome \(emergencyStore.currentParamedicUsername) !")
                                 .font(
                                     .system(
                                         size: 23,

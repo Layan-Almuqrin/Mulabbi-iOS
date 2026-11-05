@@ -4,6 +4,8 @@ struct ParamedicLoginView: View {
 
     @AppStorage("appLanguage") private var appLanguage = "en"
 
+    @Binding var paramedicUsername: String
+
     let onLogin: () -> Void
     let onBack: () -> Void
 
@@ -12,9 +14,11 @@ struct ParamedicLoginView: View {
     @State private var isPasswordVisible = false
 
     init(
+        paramedicUsername: Binding<String> = .constant(""),
         onLogin: @escaping () -> Void = {},
         onBack: @escaping () -> Void = {}
     ) {
+        self._paramedicUsername = paramedicUsername
         self.onLogin = onLogin
         self.onBack = onBack
     }
@@ -125,6 +129,8 @@ struct ParamedicLoginView: View {
                         )
 
                         Button(action: {
+                            let identity = username.trimmingCharacters(in: .whitespacesAndNewlines)
+                            paramedicUsername = identity
                             onLogin()
                         }) {
                             Text("Login")
@@ -144,7 +150,10 @@ struct ParamedicLoginView: View {
 
                             NavigationLink(
                                 destination: ParamedicSignUpView(
-                                    onSignUp: onLogin
+                                    onSignUp: { identity in
+                                        paramedicUsername = identity
+                                        onLogin()
+                                    }
                                 )
                             ) {
                                 Text("Sign up")

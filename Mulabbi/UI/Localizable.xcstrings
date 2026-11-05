@@ -1062,6 +1062,7 @@
       }
     },
     "Fahad Aldosari" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {
@@ -2029,6 +2030,7 @@
       }
     },
     "Welcome Fahad !" : {
+      "extractionState" : "stale",
       "localizations" : {
         "ar" : {
           "stringUnit" : {

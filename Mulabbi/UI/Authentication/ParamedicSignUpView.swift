@@ -6,7 +6,7 @@ struct ParamedicSignUpView: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    let onSignUp: () -> Void
+    let onSignUp: (String) -> Void
 
     @State private var username = ""
     @State private var age = ""
@@ -19,7 +19,7 @@ struct ParamedicSignUpView: View {
     @State private var isPasswordVisible = false
     @State private var isConfirmPasswordVisible = false
 
-    init(onSignUp: @escaping () -> Void = {}) {
+    init(onSignUp: @escaping (String) -> Void = { _ in }) {
         self.onSignUp = onSignUp
     }
 
@@ -183,7 +183,9 @@ struct ParamedicSignUpView: View {
                         }
 
                         Button(action: {
-                            onSignUp()
+                            let identity = username.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !identity.isEmpty else { return }
+                            onSignUp(identity)
                         }) {
 
                             Text("Create Account")
