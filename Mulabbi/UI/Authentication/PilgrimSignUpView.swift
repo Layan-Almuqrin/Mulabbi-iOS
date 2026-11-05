@@ -188,6 +188,7 @@ struct PilgrimSignUpView: View {
         return true
     }
 
+    // هنا ننشئ الحساب ونحفظ بيانات الحاج بعد التأكد من الحقول.
     private func createAccount() {
         let cleanEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let usernameValue = username.trimmingCharacters(in: .whitespacesAndNewlines)
