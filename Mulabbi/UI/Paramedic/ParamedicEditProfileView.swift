@@ -15,14 +15,14 @@ struct ParamedicProfileData {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    static let sample = ParamedicProfileData(
-        username: "Fahad7dd",
-        age: "27",
-        firstName: "Fahad",
-        lastName: "Aldosari",
-        password: "Fahad1234567890",
-        email: "Fahad@gmail.com",
-        certificateFileName: "Paramedic Certificate.pdf"
+    static let empty = ParamedicProfileData(
+        username: "",
+        age: "",
+        firstName: "",
+        lastName: "",
+        password: "",
+        email: "",
+        certificateFileName: ""
     )
 }
 
@@ -221,6 +221,7 @@ struct ParamedicEditProfileView: View {
                 }
             }
             .buttonStyle(.plain)
+            .allowsHitTesting(false)
 
         }
     }
@@ -238,7 +239,7 @@ struct ParamedicEditProfileView: View {
     private func validateAndSave(using proxy: ScrollViewProxy) {
         var invalid: Set<ParamedicProfileField> = []
 
-        if draft.username.isBlank { invalid.insert(.username) }
+        if !draft.username.isValidSignupUsername { invalid.insert(.username) }
         if draft.age.isBlank {
             invalid.insert(.age)
         } else if !draft.age.isValidAge {
@@ -246,8 +247,14 @@ struct ParamedicEditProfileView: View {
         }
         if draft.firstName.isBlank { invalid.insert(.firstName) }
         if draft.lastName.isBlank { invalid.insert(.lastName) }
-        if draft.password.isBlank { invalid.insert(.password) }
-        if confirmPassword.isBlank || confirmPassword != draft.password {
+        if !draft.password.isBlank {
+            if !draft.password.isValidSignupPassword {
+                invalid.insert(.password)
+            }
+            if confirmPassword != draft.password {
+                invalid.insert(.confirmPassword)
+            }
+        } else if !confirmPassword.isBlank {
             invalid.insert(.confirmPassword)
         }
         if draft.email.isBlank {
@@ -300,8 +307,6 @@ struct ParamedicEditProfileView: View {
             || draft.age.isBlank
             || draft.firstName.isBlank
             || draft.lastName.isBlank
-            || draft.password.isBlank
-            || confirmPassword.isBlank
             || draft.email.isBlank
             || draft.certificateFileName.isBlank
     }
@@ -321,7 +326,7 @@ private enum ParamedicProfileField: Hashable {
 #Preview {
     NavigationStack {
         ParamedicEditProfileView(
-            profile: .sample,
+            profile: .empty,
             onBack: {},
             onSave: { _ in }
         )

@@ -25,18 +25,16 @@ final class HeartRateMonitor: ObservableObject {
     @Published private(set) var alertReading: HeartRateReading?
 
     private let healthStore = HKHealthStore()
-    
-    // let lowerLimit = 60
-    // let upperLimit = Int(((208.0 - (0.7 * Double(age))) * 0.85).rounded())
     private let lowerLimit = 60
     private var upperLimit = 100
+    private let upperLimitKey = "heartRateUpperLimit"
     private var observerQuery: HKObserverQuery?
     private var lastState: HeartRateState = .normal
     private var lastProcessedSampleDate: Date?
 
     private init() {}
 
-    func connect() async throws {
+    func connect(age: Int) async throws {
         guard HKHealthStore.isHealthDataAvailable() else {
             throw HeartRateMonitorError.healthDataUnavailable
         }
@@ -48,8 +46,15 @@ final class HeartRateMonitor: ObservableObject {
         try await healthStore.requestAuthorization(toShare: [], read: [heartRateType])
         await HeartRateNotifier.requestPermission()
 
+        updateAge(age)
         UserDefaults.standard.set(true, forKey: "heartRateMonitoringEnabled")
         startMonitoring(fetchCurrentReading: true)
+    }
+
+    func updateAge(_ age: Int) {
+        guard age >= 15 else { return }
+        upperLimit = Int(((208.0 - (0.7 * Double(age))) * 0.85).rounded())
+        UserDefaults.standard.set(upperLimit, forKey: upperLimitKey)
     }
 
     func resumeMonitoringIfEnabled() {
@@ -57,6 +62,10 @@ final class HeartRateMonitor: ObservableObject {
             return
         }
 
+        let savedUpperLimit = UserDefaults.standard.integer(forKey: upperLimitKey)
+        if savedUpperLimit > 0 {
+            upperLimit = savedUpperLimit
+        }
         startMonitoring(fetchCurrentReading: false)
     }
 
