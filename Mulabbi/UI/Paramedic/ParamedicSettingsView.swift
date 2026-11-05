@@ -18,7 +18,9 @@ struct ParamedicSettingsView: View {
     
     @State private var goToCaseHistory = false
     @State private var route: ParamedicSettingsRoute = .overview
-    @State private var paramedicProfile = ParamedicProfileData.sample
+    @State private var paramedicProfile = ParamedicProfileData.empty
+    @StateObject private var settingsStore = ParamedicSettingsStore()
+    @State private var settingsError: String?
     
     
   
@@ -330,8 +332,7 @@ struct ParamedicSettingsView: View {
                     profile: paramedicProfile,
                     onBack: { route = .overview },
                     onSave: { updatedProfile in
-                        paramedicProfile = updatedProfile
-                        route = .overview
+                        saveProfile(updatedProfile)
                     }
                 )
 
@@ -342,6 +343,63 @@ struct ParamedicSettingsView: View {
                 )
             }
         }
+        .task {
+            await fetchSettings()
+        }
+        .alert("Settings", isPresented: isShowingSettingsError) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(settingsError ?? "")
+        }
+    }
+
+    private func fetchSettings() async {
+        await settingsStore.fetch()
+        guard settingsStore.errorMessage == nil else {
+            settingsError = settingsStore.errorMessage
+            return
+        }
+
+        let storedProfile = settingsStore.profile
+        paramedicProfile = ParamedicProfileData(
+            username: storedProfile.username,
+            age: String(storedProfile.age),
+            firstName: storedProfile.firstName,
+            lastName: storedProfile.lastName,
+            password: "",
+            email: storedProfile.email,
+            certificateFileName: storedProfile.certificateFileName
+        )
+    }
+
+    private func saveProfile(_ updatedProfile: ParamedicProfileData) {
+        settingsStore.profile = ParamedicProfileSettings(
+            username: updatedProfile.username,
+            age: Int(updatedProfile.age) ?? 0,
+            firstName: updatedProfile.firstName,
+            lastName: updatedProfile.lastName,
+            email: updatedProfile.email,
+            certificateFileName: paramedicProfile.certificateFileName
+        )
+
+        Task {
+            if await settingsStore.saveProfile(newPassword: updatedProfile.password) {
+                var savedProfile = updatedProfile
+                savedProfile.password = ""
+                savedProfile.certificateFileName = paramedicProfile.certificateFileName
+                paramedicProfile = savedProfile
+                route = .overview
+            } else {
+                settingsError = settingsStore.errorMessage
+            }
+        }
+    }
+
+    private var isShowingSettingsError: Binding<Bool> {
+        Binding(
+            get: { settingsError != nil },
+            set: { if !$0 { settingsError = nil } }
+        )
     }
 }
 

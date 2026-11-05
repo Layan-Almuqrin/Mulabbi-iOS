@@ -63,6 +63,7 @@ struct HomeView: View {
     @AppStorage("heartRateMonitoringEnabled") private var isWatchConnected = false
     @StateObject private var locationManager = LocationManager()
     @StateObject private var heartRateMonitor = HeartRateMonitor.shared
+    @StateObject private var settingsStore = PilgrimSettingsStore()
     @ObservedObject var emergencyStore: CompanionEmergencyStore
 
     @State private var pendingAction: PendingAction?
@@ -268,7 +269,12 @@ struct HomeView: View {
                         activeAlert = .disconnectWatch
                     } else {
                         Task {
-                            try? await heartRateMonitor.connect()
+                            do {
+                                let age = try await settingsStore.fetchAge()
+                                try await heartRateMonitor.connect(age: age)
+                            } catch {
+                                print("Unable to connect heart-rate monitoring: \(error)")
+                            }
                         }
                     }
                 } label: {

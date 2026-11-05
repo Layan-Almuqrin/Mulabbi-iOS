@@ -4,6 +4,13 @@ struct ChatMessage: Identifiable {
     let id = UUID()
     let role: ChatRole
     let text: String
+    let shouldLocalize: Bool
+
+    init(role: ChatRole, text: String, shouldLocalize: Bool = false) {
+        self.role = role
+        self.text = text
+        self.shouldLocalize = shouldLocalize
+    }
 }
 
 enum ChatRole {
@@ -14,21 +21,6 @@ enum ChatRole {
 private enum ChatbotCopy {
     static let englishWelcome =
         "Hello, I’m Mulabbi. I’m here to guide you with quick first-aid and emergency support."
-
-    static let englishChoking =
-        """
-        If the person can breathe forcefully, they should continue coughing.
-        However, if the person is choking and cannot speak, cry, or laugh forcefully, do the following:
-        1. Stand behind the injured person.
-        2. Place one foot slightly in front of the other for balance.
-        3. Wrap your arms around the person’s waist.
-        4. Lean the person slightly forward.
-        5. Make a fist with one hand and place it above the navel.
-        6. Hold the fist with your other hand, then give a quick, strong upward thrust to the abdomen.
-        7. Repeat 6 to 10 abdominal thrusts until the stuck object is removed.
-        If the injured person loses consciousness, perform CPR and make sure to press the Request Help button.
-        """
-
 }
 
 struct ChatbotView: View {
@@ -37,9 +29,11 @@ struct ChatbotView: View {
     @State private var messages: [ChatMessage] = [
         ChatMessage(
             role: .assistant,
-            text: ChatbotCopy.englishWelcome
+            text: ChatbotCopy.englishWelcome,
+            shouldLocalize: true
         )
     ]
+    @State private var isWaitingForReply = false
     @FocusState private var isMessageFocused: Bool
 
     var body: some View {
@@ -66,7 +60,7 @@ struct ChatbotView: View {
                         ForEach(messages) { chatMessage in
                             switch chatMessage.role {
                             case .assistant:
-                                assistantBubble(chatMessage.text)
+                                assistantBubble(chatMessage)
                             case .user:
                                 userBubble(chatMessage.text)
                             }
@@ -143,21 +137,27 @@ struct ChatbotView: View {
         .accessibilityLabel(Text("Send message"))
     }
 
-    private func assistantBubble(_ text: String) -> some View {
+    private func assistantBubble(_ message: ChatMessage) -> some View {
         HStack {
             if isArabic {
                 Spacer(minLength: 18)
-                assistantBubbleContent(text)
+                assistantBubbleContent(message)
             } else {
-                assistantBubbleContent(text)
+                assistantBubbleContent(message)
                 Spacer(minLength: 18)
             }
         }
         .environment(\.layoutDirection, .leftToRight)
     }
 
-    private func assistantBubbleContent(_ text: String) -> some View {
-        Text(LocalizedStringKey(text))
+    private func assistantBubbleContent(_ message: ChatMessage) -> some View {
+        Group {
+            if message.shouldLocalize {
+                Text(LocalizedStringKey(message.text))
+            } else {
+                Text(message.text)
+            }
+        }
             .font(.system(size: 13.5))
             .foregroundStyle(.black)
             .lineSpacing(2.5)
@@ -212,7 +212,7 @@ struct ChatbotView: View {
     private func sendMessage() {
         let outgoingMessage = message.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !outgoingMessage.isEmpty else {
+        guard !outgoingMessage.isEmpty, !isWaitingForReply else {
             isMessageFocused = false
             return
         }
@@ -223,21 +223,37 @@ struct ChatbotView: View {
 
         message = ""
         isMessageFocused = false
+        isWaitingForReply = true
 
-        requestChatbotReply(for: outgoingMessage) { reply in
-            withAnimation(.easeOut(duration: 0.25)) {
-                messages.append(ChatMessage(role: .assistant, text: reply))
+        Task {
+            do {
+                let reply = try await ChatbotService.shared.sendMessage(outgoingMessage)
+
+                withAnimation(.easeOut(duration: 0.25)) {
+                    messages.append(ChatMessage(role: .assistant, text: reply))
+                }
+            } catch {
+                withAnimation(.easeOut(duration: 0.25)) {
+                    messages.append(
+                        ChatMessage(role: .assistant, text: chatbotErrorMessage(for: error))
+                    )
+                }
             }
+
+            isWaitingForReply = false
         }
     }
 
-    private func requestChatbotReply(
-        for userMessage: String,
-        completion: @escaping (String) -> Void
-    ) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-            completion(chokingInstructions)
+    private func chatbotErrorMessage(for error: Error) -> String {
+        if case ChatbotServiceError.missingURL = error {
+            return isArabic
+                ? "المساعد الذكي غير متصل حاليًا."
+                : "The chatbot is not connected yet."
         }
+
+        return isArabic
+            ? "تعذر الحصول على رد. حاول مرة أخرى."
+            : "Couldn’t get a response. Please try again."
     }
 
     private func scrollToLatestMessage(using proxy: ScrollViewProxy) {
@@ -246,10 +262,6 @@ struct ChatbotView: View {
                 proxy.scrollTo("conversation-bottom", anchor: .bottom)
             }
         }
-    }
-
-    private var chokingInstructions: String {
-        ChatbotCopy.englishChoking
     }
 
     private var isArabic: Bool {
