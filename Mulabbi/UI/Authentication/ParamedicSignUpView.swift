@@ -31,6 +31,7 @@ struct ParamedicSignUpView: View {
     @State private var certificateImportError: String? = nil
     @State private var certificateConfirmed = false
     @State private var certificateLooksEligible = false
+    @State private var certificateOCRText = ""
     @State private var isCheckingCertificate = false
     @State private var signupMessage: String?
     @State private var showEmailVerification = false
@@ -132,13 +133,50 @@ struct ParamedicSignUpView: View {
         certificateURL?.lastPathComponent
     }
 
+    private func normalizedCertificateValue(_ value: String) -> String {
+        var normalized = value.lowercased()
+            .folding(options: [.diacriticInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+
+        let replacements = [
+            "أ": "ا", "إ": "ا", "آ": "ا", "ٱ": "ا",
+            "ى": "ي", "ة": "ه", "ـ": ""
+        ]
+        for (source, destination) in replacements {
+            normalized = normalized.replacingOccurrences(of: source, with: destination)
+        }
+
+        return String(String.UnicodeScalarView(normalized.unicodeScalars.filter { CharacterSet.alphanumerics.contains($0) }))
+    }
+
+    private var certificateNameMatches: Bool {
+        let first = normalizedCertificateValue(firstName.trimmingCharacters(in: .whitespacesAndNewlines))
+        let last = normalizedCertificateValue(lastName.trimmingCharacters(in: .whitespacesAndNewlines))
+        let recognizedText = normalizedCertificateValue(certificateOCRText)
+
+        guard first.count >= 2, last.count >= 2, !recognizedText.isEmpty else {
+            return false
+        }
+
+        return recognizedText.contains(first) && recognizedText.contains(last)
+    }
+
     private var certificateError: String? {
         if let importError = certificateImportError {
             return importError
         }
-        if certificateURL == nil { return tr("Please attach your certificate", "يرجى إرفاق الشهادة") }
-        if isCheckingCertificate { return tr("Checking certificate…", "جارٍ فحص الشهادة…") }
-        return certificateLooksEligible ? nil : tr("The certificate does not appear to match the required course and issuer", "الشهادة لا تبدو مطابقة للدورة والجهة المطلوبة")
+        if certificateURL == nil {
+            return tr("Please attach your certificate", "يرجى إرفاق الشهادة")
+        }
+        if isCheckingCertificate {
+            return tr("Checking certificate…", "جارٍ فحص الشهادة…")
+        }
+        if !certificateLooksEligible {
+            return tr("The certificate does not appear to match the required course and issuer", "الشهادة لا تبدو مطابقة للدورة والجهة المطلوبة")
+        }
+        if showErrors && !certificateNameMatches {
+            return tr("The name on the certificate must match your first and last name", "يجب أن يطابق الاسم في الشهادة الاسم الأول واسم العائلة المدخلين")
+        }
+        return nil
     }
     private var confirmationError: String? {
         certificateConfirmed
@@ -158,6 +196,7 @@ struct ParamedicSignUpView: View {
         && emailError == nil
         && certificateURL != nil
         && certificateLooksEligible
+        && certificateNameMatches
         && certificateConfirmed
     }
     private func validateAndSubmit() -> Bool {
@@ -180,6 +219,7 @@ struct ParamedicSignUpView: View {
                 guard fileExtension == "pdf" || supportedImageExtensions.contains(fileExtension) else {
                     certificateURL = nil
                     certificateLooksEligible = false
+                    certificateOCRText = ""
                     certificateImportError = tr(
                         "Please choose a PDF or image file.",
                         "يرجى اختيار ملف PDF أو صورة."
@@ -192,12 +232,15 @@ struct ParamedicSignUpView: View {
                 certificateURL = url
                 certificateImportError = nil
                 certificateLooksEligible = false
+                certificateOCRText = ""
                 checkCertificate(url)
             }
         case .failure(let error):
             if (error as? CocoaError)?.code == .userCancelled {
                 return
             }
+            certificateLooksEligible = false
+            certificateOCRText = ""
             certificateImportError = tr(
                 "Could not open the file. Please try again.",
                 "تعذر فتح الملف. يرجى المحاولة مرة أخرى."
@@ -205,6 +248,7 @@ struct ParamedicSignUpView: View {
         }
     }
 
+    // هنا نفحص الشهادة ونتأكد إنها مطابقة للمطلوب.
     private func checkCertificate(_ url: URL) {
         isCheckingCertificate = true
         Task {
@@ -234,16 +278,22 @@ struct ParamedicSignUpView: View {
                 let firstAid = normalized.contains("الإسعافاتالأولية") || normalized.contains("الاسعافاتالاولية") || normalized.contains("firstaid")
                 let issuer = normalized.contains("الهلالالأحمرالسعودي") || normalized.contains("saudiredcrescent")
                 await MainActor.run {
+                    certificateOCRText = text
                     certificateLooksEligible = course && firstAid && issuer
                     isCheckingCertificate = false
                 }
             } catch {
-                await MainActor.run { certificateLooksEligible = false; isCheckingCertificate = false }
+                await MainActor.run {
+                    certificateLooksEligible = false
+                    certificateOCRText = ""
+                    isCheckingCertificate = false
+                }
             }
         }
     }
 
-    private func createAccount() {
+    // هنا ننشئ حساب المسعف ونحفظ بياناته مع الشهادة.
+private func createAccount() {
         let emailValue = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let usernameValue = username.trimmingCharacters(in: .whitespacesAndNewlines)
         let usernameKey = usernameValue.lowercased()

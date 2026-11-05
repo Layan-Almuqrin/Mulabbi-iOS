@@ -40,6 +40,7 @@ struct ParamedicLoginView: View {
             : nil
     }
 
+    // هنا نتحقق من حساب المسعف وبيانات دخوله.
     private func attemptLogin() {
         showErrors = true
         errorMessage = nil

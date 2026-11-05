@@ -42,6 +42,7 @@ struct PilgrimLoginView: View {
             : nil
     }
 
+    // هنا نتحقق من حساب الحاج قبل ما ندخله.
     private func attemptLogin() {
         showErrors = true
         errorMessage = nil
