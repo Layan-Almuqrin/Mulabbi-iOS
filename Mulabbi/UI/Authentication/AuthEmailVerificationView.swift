@@ -123,6 +123,7 @@ struct AuthEmailVerificationView: View {
         .navigationBarBackButtonHidden(true)
     }
 
+    // هنا نتأكد من حالة البريد بعد ما يرجع المستخدم من رابط التحقق.
     private func checkVerification() {
         guard let user = Auth.auth().currentUser else {
             message = tr("Please sign in again after verifying your email.", "بعد تأكيد البريد، سجّلي الدخول مجددًا.")

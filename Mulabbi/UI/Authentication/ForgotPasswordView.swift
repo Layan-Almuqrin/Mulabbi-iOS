@@ -14,6 +14,7 @@ struct ForgotPasswordView: View {
     @State private var errorMessage: String?
     @State private var isSending = false
 
+    // هنا نرسل رابط إعادة تعيين كلمة المرور للبريد المدخل.
     private func sendResetLink() {
         let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !address.isEmpty else {
