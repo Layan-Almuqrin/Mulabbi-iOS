@@ -4,11 +4,11 @@ import FirebaseCore
 @main
 struct MulabbiApp: App {
     
-    init(){
+    init() {
         FirebaseApp.configure()
         HeartRateMonitor.shared.resumeMonitoringIfEnabled()
     }
-
+    
     var body: some Scene {
         WindowGroup {
             MainView()

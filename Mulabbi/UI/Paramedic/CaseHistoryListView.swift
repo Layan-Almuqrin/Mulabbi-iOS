@@ -149,18 +149,13 @@ struct CaseHistoryListView: View {
                 .zIndex(10)
             }
         }
-        
-        
-    
-        
+        .task {
+            await emergencyStore.loadCaseHistory()
+        }
         .animation(
             nil,
             value: selectedCase?.id
         )
-        
-        
-       
-        
         .navigationBarBackButtonHidden(true)
         .toolbar(
             .hidden,

@@ -14,6 +14,8 @@ struct MainView: View {
     @AppStorage("appLanguage") private var appLanguage = "en"
     
     @State private var screen: AppScreen = .welcome
+    
+    @State private var currentParamedicUsername = ""
 
     var body: some View {
         
@@ -55,6 +57,7 @@ struct MainView: View {
             case .paramedicLogin:
                 
                 ParamedicLoginView(
+                    paramedicUsername: $currentParamedicUsername,
                     onLogin: {
                         screen = .paramedicApp
                     },
@@ -76,10 +79,13 @@ struct MainView: View {
             case .paramedicApp:
                 
                 ParamedicMainView(
+                    paramedicUsername: currentParamedicUsername,
                     onLogout: {
+                        currentParamedicUsername = ""
                         screen = .roleSelection
                     }
                 )
+                .id(currentParamedicUsername)
             }
         }
         .environment(
@@ -96,7 +102,6 @@ struct MainView: View {
 }
 
 
-
 private struct WelcomeView: View {
     
     let continueAction: () -> Void
@@ -104,7 +109,6 @@ private struct WelcomeView: View {
     var body: some View {
         
         ZStack {
-            
             
             Color.mulabbiRoseTint
 
@@ -137,7 +141,6 @@ private struct WelcomeView: View {
         }
     }
 }
-
 
 
 #Preview {

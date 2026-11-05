@@ -9,21 +9,15 @@ private enum ParamedicSettingsRoute {
 struct ParamedicSettingsView: View {
     let onLogout: () -> Void
     
-    
-    
     @ObservedObject var emergencyStore: EmergencyStore
-    
-    
-    
     
     @State private var goToCaseHistory = false
     @State private var route: ParamedicSettingsRoute = .overview
-    @State private var paramedicProfile = ParamedicProfileData.empty
+    
+    @State private var paramedicProfile: ParamedicProfileData
     @StateObject private var settingsStore = ParamedicSettingsStore()
     @State private var settingsError: String?
     
-    
-  
     
     init(
         emergencyStore: EmergencyStore = EmergencyStore(),
@@ -33,7 +27,20 @@ struct ParamedicSettingsView: View {
         self._emergencyStore = ObservedObject(
             wrappedValue: emergencyStore
         )
+        
         self.onLogout = onLogout
+        
+        _paramedicProfile = State(
+            initialValue: ParamedicProfileData(
+                username: emergencyStore.currentParamedicUsername,
+                age: "",
+                firstName: "",
+                lastName: "",
+                password: "",
+                email: "",
+                certificateFileName: ""
+            )
+        )
     }
     
     
@@ -41,25 +48,41 @@ struct ParamedicSettingsView: View {
         
         ZStack {
             
-            
-            
             AppColors.surface
                 .ignoresSafeArea()
 
             VStack(spacing: 0) {
+                
                 ZStack(alignment: .top) {
+                    
                     Rectangle()
-                        .fill(Color(red: 0.93, green: 0.93, blue: 0.94))
+                        .fill(
+                            Color(
+                                red: 0.93,
+                                green: 0.93,
+                                blue: 0.94
+                            )
+                        )
                         .frame(height: 300)
 
                     Ellipse()
-                        .fill(Color(red: 0.93, green: 0.93, blue: 0.94))
-                        .frame(width: 560, height: 120)
+                        .fill(
+                            Color(
+                                red: 0.93,
+                                green: 0.93,
+                                blue: 0.94
+                            )
+                        )
+                        .frame(
+                            width: 560,
+                            height: 120
+                        )
                         .offset(y: 250)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 330)
                 .clipped()
+                
                 Spacer()
             }
             .ignoresSafeArea(edges: .top)
@@ -71,34 +94,32 @@ struct ParamedicSettingsView: View {
                     .frame(height: 76)
                 
                 
-               
+                Image(
+                    systemName: "person.crop.circle.fill"
+                )
+                .resizable()
+                .scaledToFit()
+                .frame(
+                    width: 195,
+                    height: 195
+                )
+                .foregroundStyle(
+                    Color.gray.opacity(0.78)
+                )
                 
-                Image(systemName: "person.crop.circle.fill")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(
-                        width: 195,
-                        height: 195
+                
+                Text(
+                    emergencyStore.currentParamedicUsername
+                )
+                .font(
+                    .system(
+                        size: 30,
+                        weight: .bold
                     )
-                    .foregroundStyle(
-                        Color.gray.opacity(0.78)
-                    )
+                )
+                .foregroundStyle(.black)
+                .padding(.top, 8)
                 
-                
-               
-                
-                Text("Fahad Aldosari")
-                    .font(
-                        .system(
-                            size: 30,
-                            weight: .bold
-                        )
-                    )
-                    .foregroundStyle(.black)
-                    .padding(.top, 8)
-                
-                
-               
                 
                 Button {
                     
@@ -136,16 +157,18 @@ struct ParamedicSettingsView: View {
                         Spacer()
                         
                         
-                        Image(systemName: "chevron.right")
-                            .font(
-                                .system(
-                                    size: 18,
-                                    weight: .regular
-                                )
+                        Image(
+                            systemName: "chevron.right"
+                        )
+                        .font(
+                            .system(
+                                size: 18,
+                                weight: .regular
                             )
-                            .foregroundStyle(
-                                Color.black.opacity(0.80)
-                            )
+                        )
+                        .foregroundStyle(
+                            Color.black.opacity(0.80)
+                        )
                     }
                     .padding(.horizontal, 18)
                     .frame(height: 56)
@@ -173,8 +196,6 @@ struct ParamedicSettingsView: View {
                 .padding(.top, 28)
                 
                 
-               
-                
                 Button {
                     
                     goToCaseHistory = true
@@ -183,14 +204,16 @@ struct ParamedicSettingsView: View {
                     
                     HStack(spacing: 14) {
                         
-                        Image(systemName: "clipboard")
-                            .font(
-                                .system(
-                                    size: 27,
-                                    weight: .regular
-                                )
+                        Image(
+                            systemName: "clipboard"
+                        )
+                        .font(
+                            .system(
+                                size: 27,
+                                weight: .regular
                             )
-                            .foregroundStyle(.black)
+                        )
+                        .foregroundStyle(.black)
                         
                         
                         Text("Case History")
@@ -206,16 +229,18 @@ struct ParamedicSettingsView: View {
                         Spacer()
                         
                         
-                        Image(systemName: "chevron.right")
-                            .font(
-                                .system(
-                                    size: 18,
-                                    weight: .regular
-                                )
+                        Image(
+                            systemName: "chevron.right"
+                        )
+                        .font(
+                            .system(
+                                size: 18,
+                                weight: .regular
                             )
-                            .foregroundStyle(
-                                Color.black.opacity(0.80)
-                            )
+                        )
+                        .foregroundStyle(
+                            Color.black.opacity(0.80)
+                        )
                     }
                     .padding(.horizontal, 18)
                     .frame(height: 56)
@@ -245,8 +270,6 @@ struct ParamedicSettingsView: View {
                 
                 Spacer()
                 
-                
-               
                 
                 Button {
                     
@@ -299,10 +322,6 @@ struct ParamedicSettingsView: View {
                 .padding(.bottom, 24)
             }
         }
-        
-        
-       
-        
         .navigationDestination(
             isPresented: $goToCaseHistory
         ) {
@@ -313,92 +332,172 @@ struct ParamedicSettingsView: View {
         }
     }
 
+    
     var body: some View {
+        
         Group {
+            
             switch route {
+                
             case .overview:
+                
                 SettingsMainView(
-                    fullName: paramedicProfile.fullName,
-                    onEditProfile: { route = .profile },
-                    onEditMedicalRecord: { route = .caseHistory },
+                    fullName:
+                        paramedicProfile.fullName.isEmpty
+                        ? emergencyStore.currentParamedicUsername
+                        : paramedicProfile.fullName,
+                    onEditProfile: {
+                        route = .profile
+                    },
+                    onEditMedicalRecord: {
+                        route = .caseHistory
+                    },
                     onLogout: onLogout,
                     secondaryTitle: "Case History",
                     secondaryIcon: "clipboard",
-                    rowBorderColor: Color.gray.opacity(0.6)
+                    rowBorderColor:
+                        Color.gray.opacity(0.6)
                 )
 
+                
             case .profile:
+                
                 ParamedicEditProfileView(
                     profile: paramedicProfile,
-                    onBack: { route = .overview },
+                    onBack: {
+                        route = .overview
+                    },
                     onSave: { updatedProfile in
                         saveProfile(updatedProfile)
                     }
                 )
 
+                
             case .caseHistory:
+                
                 CaseHistoryListView(
                     emergencyStore: emergencyStore,
-                    onBack: { route = .overview }
+                    onBack: {
+                        route = .overview
+                    }
                 )
             }
         }
         .task {
             await fetchSettings()
         }
-        .alert("Settings", isPresented: isShowingSettingsError) {
-            Button("OK", role: .cancel) { }
+        .alert(
+            "Settings",
+            isPresented: isShowingSettingsError
+        ) {
+            
+            Button(
+                "OK",
+                role: .cancel
+            ) { }
+            
         } message: {
-            Text(settingsError ?? "")
+            
+            Text(
+                settingsError ?? ""
+            )
         }
     }
 
+    
     private func fetchSettings() async {
+        
         await settingsStore.fetch()
+        
         guard settingsStore.errorMessage == nil else {
             settingsError = settingsStore.errorMessage
             return
         }
 
-        let storedProfile = settingsStore.profile
-        paramedicProfile = ParamedicProfileData(
-            username: storedProfile.username,
-            age: String(storedProfile.age),
-            firstName: storedProfile.firstName,
-            lastName: storedProfile.lastName,
-            password: "",
-            email: storedProfile.email,
-            certificateFileName: storedProfile.certificateFileName
-        )
+        let storedProfile =
+            settingsStore.profile
+        
+        paramedicProfile =
+            ParamedicProfileData(
+                username:
+                    storedProfile.username,
+                age:
+                    String(storedProfile.age),
+                firstName:
+                    storedProfile.firstName,
+                lastName:
+                    storedProfile.lastName,
+                password: "",
+                email:
+                    storedProfile.email,
+                certificateFileName:
+                    storedProfile.certificateFileName
+            )
     }
 
-    private func saveProfile(_ updatedProfile: ParamedicProfileData) {
-        settingsStore.profile = ParamedicProfileSettings(
-            username: updatedProfile.username,
-            age: Int(updatedProfile.age) ?? 0,
-            firstName: updatedProfile.firstName,
-            lastName: updatedProfile.lastName,
-            email: updatedProfile.email,
-            certificateFileName: paramedicProfile.certificateFileName
-        )
+    
+    private func saveProfile(
+        _ updatedProfile: ParamedicProfileData
+    ) {
+        
+        settingsStore.profile =
+            ParamedicProfileSettings(
+                username:
+                    updatedProfile.username,
+                age:
+                    Int(updatedProfile.age) ?? 0,
+                firstName:
+                    updatedProfile.firstName,
+                lastName:
+                    updatedProfile.lastName,
+                email:
+                    updatedProfile.email,
+                certificateFileName:
+                    paramedicProfile.certificateFileName
+            )
 
         Task {
-            if await settingsStore.saveProfile(newPassword: updatedProfile.password) {
-                var savedProfile = updatedProfile
+            
+            if await settingsStore.saveProfile(
+                newPassword:
+                    updatedProfile.password
+            ) {
+                
+                var savedProfile =
+                    updatedProfile
+                
                 savedProfile.password = ""
-                savedProfile.certificateFileName = paramedicProfile.certificateFileName
-                paramedicProfile = savedProfile
+                
+                savedProfile.certificateFileName =
+                    paramedicProfile
+                        .certificateFileName
+                
+                paramedicProfile =
+                    savedProfile
+                
                 route = .overview
+                
             } else {
-                settingsError = settingsStore.errorMessage
+                
+                settingsError =
+                    settingsStore.errorMessage
             }
         }
     }
 
-    private var isShowingSettingsError: Binding<Bool> {
+    
+    private var isShowingSettingsError:
+        Binding<Bool> {
+        
         Binding(
-            get: { settingsError != nil },
-            set: { if !$0 { settingsError = nil } }
+            get: {
+                settingsError != nil
+            },
+            set: {
+                if !$0 {
+                    settingsError = nil
+                }
+            }
         )
     }
 }
@@ -408,57 +507,77 @@ struct ParamedicSettingsView: View {
 
 struct EditProfileIcon: Shape {
     
-    func path(in rect: CGRect) -> Path {
+    func path(
+        in rect: CGRect
+    ) -> Path {
         
         var path = Path()
         
-        let centerX = rect.midX
+        let centerX =
+            rect.midX
         
-        let headRadius = rect.width * 0.16
+        let headRadius =
+            rect.width * 0.16
         
         path.addEllipse(
             in: CGRect(
-                x: centerX - headRadius,
-                y: rect.height * 0.05,
-                width: headRadius * 2,
-                height: headRadius * 2
+                x:
+                    centerX - headRadius,
+                y:
+                    rect.height * 0.05,
+                width:
+                    headRadius * 2,
+                height:
+                    headRadius * 2
             )
         )
         
         
         path.move(
             to: CGPoint(
-                x: rect.width * 0.18,
-                y: rect.height * 0.93
+                x:
+                    rect.width * 0.18,
+                y:
+                    rect.height * 0.93
             )
         )
         
         path.addLine(
             to: CGPoint(
-                x: rect.width * 0.18,
-                y: rect.height * 0.76
+                x:
+                    rect.width * 0.18,
+                y:
+                    rect.height * 0.76
             )
         )
         
         path.addCurve(
             to: CGPoint(
-                x: rect.width * 0.82,
-                y: rect.height * 0.76
+                x:
+                    rect.width * 0.82,
+                y:
+                    rect.height * 0.76
             ),
             control1: CGPoint(
-                x: rect.width * 0.25,
-                y: rect.height * 0.52
+                x:
+                    rect.width * 0.25,
+                y:
+                    rect.height * 0.52
             ),
             control2: CGPoint(
-                x: rect.width * 0.75,
-                y: rect.height * 0.52
+                x:
+                    rect.width * 0.75,
+                y:
+                    rect.height * 0.52
             )
         )
         
         path.addLine(
             to: CGPoint(
-                x: rect.width * 0.82,
-                y: rect.height * 0.93
+                x:
+                    rect.width * 0.82,
+                y:
+                    rect.height * 0.93
             )
         )
         
@@ -471,56 +590,74 @@ struct EditProfileIcon: Shape {
 
 struct LogoutIcon: Shape {
     
-    func path(in rect: CGRect) -> Path {
+    func path(
+        in rect: CGRect
+    ) -> Path {
         
         var path = Path()
         
         path.addArc(
             center: CGPoint(
-                x: rect.width * 0.43,
-                y: rect.height * 0.50
+                x:
+                    rect.width * 0.43,
+                y:
+                    rect.height * 0.50
             ),
-            radius: rect.height * 0.40,
-            startAngle: .degrees(55),
-            endAngle: .degrees(305),
-            clockwise: false
+            radius:
+                rect.height * 0.40,
+            startAngle:
+                .degrees(55),
+            endAngle:
+                .degrees(305),
+            clockwise:
+                false
         )
         
         
         path.move(
             to: CGPoint(
-                x: rect.width * 0.36,
-                y: rect.height * 0.50
+                x:
+                    rect.width * 0.36,
+                y:
+                    rect.height * 0.50
             )
         )
         
         path.addLine(
             to: CGPoint(
-                x: rect.width * 0.92,
-                y: rect.height * 0.50
+                x:
+                    rect.width * 0.92,
+                y:
+                    rect.height * 0.50
             )
         )
         
         
         path.move(
             to: CGPoint(
-                x: rect.width * 0.72,
-                y: rect.height * 0.27
+                x:
+                    rect.width * 0.72,
+                y:
+                    rect.height * 0.27
             )
         )
         
         path.addLine(
             to: CGPoint(
-                x: rect.width * 0.92,
-                y: rect.height * 0.50
+                x:
+                    rect.width * 0.92,
+                y:
+                    rect.height * 0.50
             )
         )
         
         
         path.addLine(
             to: CGPoint(
-                x: rect.width * 0.72,
-                y: rect.height * 0.73
+                x:
+                    rect.width * 0.72,
+                y:
+                    rect.height * 0.73
             )
         )
         
