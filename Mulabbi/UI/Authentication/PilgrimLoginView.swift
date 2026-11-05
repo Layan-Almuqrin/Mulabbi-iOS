@@ -15,6 +15,8 @@ struct PilgrimLoginView: View {
     @State private var isLoading = false
 
     @AppStorage("appLanguage") private var appLanguage = "en"
+    /// يحتفظ باسم المستخدم الذي سجل دخوله ليستخدمه الهوم والمرافقون
+    @AppStorage("currentUsername") private var currentUsername = ""
 
     init(
         onLogin: @escaping () -> Void = {},
@@ -80,6 +82,8 @@ struct PilgrimLoginView: View {
                 }
 
                 await MainActor.run {
+                    currentUsername = username
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
                     isLoading = false
                     onLogin()
                 }
