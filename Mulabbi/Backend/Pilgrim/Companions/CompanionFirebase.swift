@@ -9,9 +9,10 @@ final class CompanionFirebase {
         by phoneNumber: String,
         completion: @escaping (Result<Companion?, Error>) -> Void
     ) {
-        database.collection("pilgrims")
-            .whereField("phoneNumber", isEqualTo: phoneNumber)
-            .limit(to: 1)
+        /// يحذف علامات التنسيق من الرقم قبل مقارنته بأرقام المستخدمين
+        let enteredPhoneNumber = phoneNumber.filter(\.isNumber)
+
+        database.collection("users")
             .getDocuments { snapshot, error in
                 if let error {
                     completion(.failure(error))
@@ -19,7 +20,12 @@ final class CompanionFirebase {
                 }
 
                 guard
-                    let document = snapshot?.documents.first,
+                    let document = snapshot?.documents.first(where: {
+                        let savedPhoneNumber = ($0["phoneNumber"] as? String ?? "")
+                            .filter(\.isNumber)
+                        return savedPhoneNumber == enteredPhoneNumber
+                            && ($0["role"] as? String) == "pilgrim"
+                    }),
                     let username = document["username"] as? String,
                     let firstName = document["firstName"] as? String,
                     let lastName = document["lastName"] as? String,
@@ -44,7 +50,7 @@ final class CompanionFirebase {
         byUsername username: String,
         completion: @escaping (Result<Companion?, Error>) -> Void
     ) {
-        database.collection("pilgrims")
+        database.collection("users")
             .whereField("username", isEqualTo: username)
             .limit(to: 1)
             .getDocuments { snapshot, error in
