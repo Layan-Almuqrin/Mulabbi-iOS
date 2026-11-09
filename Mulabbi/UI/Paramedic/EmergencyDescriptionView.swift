@@ -26,6 +26,7 @@ struct EmergencyDescriptionView: View {
     
     
     
+    @StateObject private var mapRoute = ParamedicMapRoute()
     @State private var cameraPosition: MapCameraPosition
     
     
@@ -62,13 +63,10 @@ struct EmergencyDescriptionView: View {
         _cameraPosition = State(
             initialValue: .region(
                 MKCoordinateRegion(
-                    center: CLLocationCoordinate2D(
-                        latitude: 21.4225,
-                        longitude: 39.8262
-                    ),
+                    center: self.emergencyLocation,
                     span: MKCoordinateSpan(
-                        latitudeDelta: 0.022,
-                        longitudeDelta: 0.022
+                        latitudeDelta: 0.018,
+                        longitudeDelta: 0.018
                     )
                 )
             )
@@ -103,13 +101,10 @@ struct EmergencyDescriptionView: View {
         _cameraPosition = State(
             initialValue: .region(
                 MKCoordinateRegion(
-                    center: CLLocationCoordinate2D(
-                        latitude: 21.4225,
-                        longitude: 39.8262
-                    ),
+                    center: self.emergencyLocation,
                     span: MKCoordinateSpan(
-                        latitudeDelta: 0.022,
-                        longitudeDelta: 0.022
+                        latitudeDelta: 0.018,
+                        longitudeDelta: 0.018
                     )
                 )
             )
@@ -145,13 +140,10 @@ struct EmergencyDescriptionView: View {
         _cameraPosition = State(
             initialValue: .region(
                 MKCoordinateRegion(
-                    center: CLLocationCoordinate2D(
-                        latitude: 21.4225,
-                        longitude: 39.8262
-                    ),
+                    center: self.emergencyLocation,
                     span: MKCoordinateSpan(
-                        latitudeDelta: 0.022,
-                        longitudeDelta: 0.022
+                        latitudeDelta: 0.018,
+                        longitudeDelta: 0.018
                     )
                 )
             )
@@ -188,27 +180,16 @@ struct EmergencyDescriptionView: View {
                         anchor: .center
                     ) {
                         
-                        ZStack {
-                            
-                            Circle()
-                                .fill(
-                                    Color.red.opacity(0.23)
-                                )
-                                .frame(
-                                    width: 145,
-                                    height: 145
-                                )
-                            
-                            
-                            EmergencyDescriptionPin()
-                                .frame(
-                                    width: 38,
-                                    height: 48
-                                )
-                        }
+                        CompanionLocationMarker()
                     }
+                    ParamedicRouteOverlay(route: mapRoute)
                 }
                 .mapStyle(.standard)
+                .onAppear { mapRoute.start(to: emergencyLocation) }
+                .onDisappear { mapRoute.stop() }
+                .onReceive(mapRoute.$initialRegion) { region in
+                    if let region { cameraPosition = .region(region) }
+                }
                 .ignoresSafeArea()
                 
                 
