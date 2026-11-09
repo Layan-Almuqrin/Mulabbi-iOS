@@ -38,6 +38,8 @@ struct ParamedicHomeView: View {
     
     
     
+    @State private var isMapVisible = false
+    @StateObject private var mapRoute = ParamedicMapRoute()
     @State private var cameraPosition: MapCameraPosition = .region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(
@@ -45,13 +47,24 @@ struct ParamedicHomeView: View {
                 longitude: 39.8262
             ),
             span: MKCoordinateSpan(
-                latitudeDelta: 0.022,
-                longitudeDelta: 0.022
+                latitudeDelta: 0.018,
+                longitudeDelta: 0.018
             )
         )
     )
     
     
+    private var activeEmergencyCoordinate: CLLocationCoordinate2D? {
+        emergencyStore.emergencyLocations.first {
+            $0.id == emergencyStore.activeEmergencyID
+        }?.coordinate
+    }
+
+    private var activeRouteKey: String? {
+        guard let coordinate = activeEmergencyCoordinate else { return nil }
+        return "\(emergencyStore.activeEmergencyID?.uuidString ?? ""):\(coordinate.latitude):\(coordinate.longitude)"
+    }
+
     var body: some View {
         
         ZStack {
@@ -101,30 +114,29 @@ struct ParamedicHomeView: View {
                             
                         } label: {
                             
-                            ZStack {
-                                
-                                Circle()
-                                    .fill(
-                                        Color.red.opacity(0.23)
-                                    )
-                                    .frame(
-                                        width: 135,
-                                        height: 135
-                                    )
-                                
-                                
-                                LocationPin()
-                                    .frame(
-                                        width: 35,
-                                        height: 44
-                                    )
-                            }
+                            CompanionLocationMarker()
                         }
                         .buttonStyle(.plain)
                     }
                 }
+                ParamedicRouteOverlay(route: mapRoute)
             }
             .mapStyle(.standard)
+            .onAppear {
+                isMapVisible = true
+                mapRoute.start(to: activeEmergencyCoordinate)
+            }
+            .onDisappear {
+                isMapVisible = false
+                mapRoute.stop()
+            }
+            .onChange(of: activeRouteKey) { _, _ in
+                guard isMapVisible else { return }
+                mapRoute.start(to: activeEmergencyCoordinate)
+            }
+            .onReceive(mapRoute.$initialRegion) { region in
+                if let region { cameraPosition = .region(region) }
+            }
             .ignoresSafeArea()
             
             

@@ -27,10 +27,9 @@ struct ActiveEmergencyView: View {
     
     
     @State private var cameraPosition: MapCameraPosition
-    
-    
-   
-    
+
+    @StateObject private var mapRoute = ParamedicMapRoute()
+
     init(
         emergencyID: UUID = UUID(),
         emergencyStore: EmergencyStore = EmergencyStore(),
@@ -58,13 +57,10 @@ struct ActiveEmergencyView: View {
         self._cameraPosition = State(
             initialValue: .region(
                 MKCoordinateRegion(
-                    center: CLLocationCoordinate2D(
-                        latitude: 21.4225,
-                        longitude: 39.8262
-                    ),
+                    center: self.emergencyLocation,
                     span: MKCoordinateSpan(
-                        latitudeDelta: 0.022,
-                        longitudeDelta: 0.022
+                        latitudeDelta: 0.018,
+                        longitudeDelta: 0.018
                     )
                 )
             )
@@ -86,25 +82,10 @@ struct ActiveEmergencyView: View {
                     anchor: .center
                 ) {
                     
-                    ZStack {
-                        
-                        Circle()
-                            .fill(
-                                Color.red.opacity(0.23)
-                            )
-                            .frame(
-                                width: 135,
-                                height: 135
-                            )
-                        
-                        
-                        LocationPin()
-                            .frame(
-                                width: 35,
-                                height: 44
-                            )
-                    }
+                    CompanionLocationMarker()
                 }
+
+                ParamedicRouteOverlay(route: mapRoute)
             }
             .mapStyle(.standard)
             .ignoresSafeArea()
@@ -193,6 +174,11 @@ struct ActiveEmergencyView: View {
         
         
         
+        .onAppear { mapRoute.start(to: emergencyLocation) }
+        .onDisappear { mapRoute.stop() }
+        .onReceive(mapRoute.$initialRegion) { region in
+            if let region { cameraPosition = .region(region) }
+        }
         .navigationDestination(
             isPresented: $goToEmergencyDescription
         ) {
@@ -206,6 +192,7 @@ struct ActiveEmergencyView: View {
             )
         }
     }
+
 }
 
 
