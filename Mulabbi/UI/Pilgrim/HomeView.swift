@@ -493,6 +493,14 @@ struct HomeView: View {
                             requestForOthersLocation = nil
                             pendingAction = nil
                         }
+
+                        emergencyAlertFirebase.observeAlertStatus(alertId: alertId) { status in
+                            guard status == "accepted" else { return }
+
+                            DispatchQueue.main.async {
+                                activeAlert = .paramedicOnWay
+                            }
+                        }
                     }
                 }
 

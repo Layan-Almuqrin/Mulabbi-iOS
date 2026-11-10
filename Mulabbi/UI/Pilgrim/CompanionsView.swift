@@ -142,6 +142,8 @@ private struct SearchCompanionsView: View {
     @State private var isShowingCountryPicker = false
     @State private var result: SearchResult = .none
     @State private var isRequestSent = false
+    @State private var requestMessage = ""
+    @State private var isShowingRequestMessage = false
 
     var body: some View {
         ZStack {
@@ -167,6 +169,38 @@ private struct SearchCompanionsView: View {
                 Spacer()
             }
             .padding(.horizontal, 22)
+
+            if isShowingRequestMessage {
+                Color.black.opacity(0.2)
+                    .ignoresSafeArea()
+
+                VStack(alignment: .leading, spacing: 18) {
+                    Text("Companions")
+                        .font(.title3.weight(.bold))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text(requestMessage)
+                        .font(.body)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button("OK") {
+                        isShowingRequestMessage = false
+                    }
+                    .font(.headline)
+                    .foregroundStyle(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.mulabbiMaroon)
+                    .clipShape(Capsule())
+                }
+                .padding(24)
+                .background(.white)
+                .clipShape(RoundedRectangle(cornerRadius: 28))
+                .shadow(color: .black.opacity(0.2), radius: 16)
+                .padding(.horizontal, 28)
+                .environment(\.layoutDirection, .leftToRight)
+            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isShowingCountryPicker) {
@@ -250,8 +284,12 @@ private struct SearchCompanionsView: View {
             companion: companion
         ) { requestResult in
             DispatchQueue.main.async {
-                if case .success = requestResult {
+                switch requestResult {
+                case .success:
                     isRequestSent = true
+                case .failure(let error):
+                    requestMessage = error.localizedDescription
+                    isShowingRequestMessage = true
                 }
             }
         }
