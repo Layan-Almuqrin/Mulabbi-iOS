@@ -1,6 +1,14 @@
 import Foundation
 import FirebaseFirestore
 
+enum CompanionRequestError: LocalizedError {
+    case alreadyExists
+
+    var errorDescription: String? {
+        "This companion is already added or has a pending request."
+    }
+}
+
 /// مسؤول عن حفظ وإدارة بيانات المرافقين في فايربيس.
 final class CompanionFirebase {
     private let database = Firestore.firestore()
@@ -103,12 +111,33 @@ final class CompanionFirebase {
                 ]
 
                 self.database.collection("companion_connections")
-                    .addDocument(data: requestData) { error in
+                    .whereField("pilgrimUsername", isEqualTo: pilgrim.username)
+                    .getDocuments { snapshot, error in
                         if let error {
                             completion(.failure(error))
-                        } else {
-                            completion(.success(()))
+                            return
                         }
+
+                        let alreadyExists = snapshot?.documents.contains { document in
+                            let username = document["companionUsername"] as? String
+                            let status = document["status"] as? String
+                            return username == companion.username
+                                && ["pending", "accepted"].contains(status)
+                        } ?? false
+
+                        guard !alreadyExists else {
+                            completion(.failure(CompanionRequestError.alreadyExists))
+                            return
+                        }
+
+                        self.database.collection("companion_connections")
+                            .addDocument(data: requestData) { error in
+                                if let error {
+                                    completion(.failure(error))
+                                } else {
+                                    completion(.success(()))
+                                }
+                            }
                     }
 
             case .failure(let error):
@@ -212,7 +241,7 @@ final class CompanionFirebase {
                     )
                 } ?? []
 
-                completion(.success(companions))
+                completion(.success(self.removeDuplicateCompanions(companions)))
             }
     }
     
@@ -251,8 +280,15 @@ final class CompanionFirebase {
                     )
                 } ?? []
 
-                completion(.success(companions))
+                completion(.success(self.removeDuplicateCompanions(companions)))
             }
+    }
+
+    private func removeDuplicateCompanions(_ companions: [Companion]) -> [Companion] {
+        var usernames = Set<String>()
+        return companions.filter {
+            usernames.insert($0.username.lowercased()).inserted
+        }
     }
 }
 
