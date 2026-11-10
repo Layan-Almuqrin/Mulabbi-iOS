@@ -433,30 +433,15 @@ struct EmergencyDescriptionView: View {
                     
                     
                   
-                    emergencyStore.completeEmergency(
-                        emergencyID: emergencyID,
-                        description: descriptionText
-                    )
-                    
-                    
-                    print(
-                        "Emergency completed:",
-                        emergencyID
-                    )
-                    
-                    print(
-                        "Case History:",
-                        descriptionText
-                    )
-                    
-                    
-                    
-                    
-                    homePath = NavigationPath()
-                    
-                    homeNavigationID = UUID()
-                    
-                    
+                    Task {
+                        if await emergencyStore.completeEmergency(
+                            emergencyID: emergencyID,
+                            description: descriptionText
+                        ) {
+                            homePath = NavigationPath()
+                            homeNavigationID = UUID()
+                        }
+                    }
                 } label: {
                     
                     Text("Send")
@@ -484,7 +469,7 @@ struct EmergencyDescriptionView: View {
                                 )
                         )
                 }
-                .disabled(isDescriptionEmpty)
+                .disabled(isDescriptionEmpty || emergencyStore.isCompletingEmergency)
                 .padding(.horizontal, 44)
                 .padding(.top, 16)
                 .padding(.bottom, 18)

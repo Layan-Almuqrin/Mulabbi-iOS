@@ -334,13 +334,11 @@ struct EmergencyDetailsView: View {
                     
                     
                     Button {
-                        
-                        emergencyStore.acceptEmergency(
-                            emergencyID: emergencyID
-                        )
-                        
-                        goToActiveEmergency = true
-                        
+                        Task {
+                            if await emergencyStore.acceptEmergency(emergencyID: emergencyID) {
+                                goToActiveEmergency = true
+                            }
+                        }
                     } label: {
                         
                         Text("Accept")
@@ -361,6 +359,7 @@ struct EmergencyDetailsView: View {
                                     .fill(Color.mulabbiMaroon)
                             )
                     }
+                    .disabled(emergencyStore.isAcceptingEmergency)
                     .padding(.horizontal, 44)
                     .padding(.top, 14)
                     .padding(.bottom, 12)

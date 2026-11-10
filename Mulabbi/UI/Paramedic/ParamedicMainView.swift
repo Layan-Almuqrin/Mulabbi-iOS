@@ -5,6 +5,7 @@ struct ParamedicMainView: View {
     let paramedicUsername: String
     let onLogout: () -> Void
     
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var emergencyStore: EmergencyStore
     
     @State private var selectedTab = 0
@@ -51,7 +52,10 @@ struct ParamedicMainView: View {
             
             ParamedicSettingsView(
                 emergencyStore: emergencyStore,
-                onLogout: onLogout
+                onLogout: {
+                    emergencyStore.stopListeningForEmergencies()
+                    onLogout()
+                }
             )
             .tabItem {
                 Label(
@@ -60,6 +64,23 @@ struct ParamedicMainView: View {
                 )
             }
             .tag(1)
+        }
+        .onAppear { emergencyStore.startListeningForEmergencies() }
+        .onDisappear { emergencyStore.stopListeningForEmergencies() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active {
+                emergencyStore.startListeningForEmergencies()
+            } else if phase == .background {
+                emergencyStore.stopListeningForEmergencies()
+            }
+        }
+        .alert("Unable to update request", isPresented: Binding(
+            get: { emergencyStore.emergencyError != nil },
+            set: { if !$0 { emergencyStore.emergencyError = nil } }
+        )) {
+            Button("OK", role: .cancel) { emergencyStore.emergencyError = nil }
+        } message: {
+            Text(emergencyStore.emergencyError ?? "")
         }
         .tint(Color.mulabbiMaroon)
         .toolbarBackground(
