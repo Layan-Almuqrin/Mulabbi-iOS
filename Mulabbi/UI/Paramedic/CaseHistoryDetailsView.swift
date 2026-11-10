@@ -206,66 +206,71 @@ struct CaseHistoryDetailsView: View {
                             spacing: 0
                         ) {
                             
-                            Text("Age : \(age)")
-                                .caseHistoryDetailText()
-                                .padding(.bottom, 13)
-                            
-                            
-                            Text("Nationality : \(nationality)")
-                                .caseHistoryDetailText()
-                                .padding(.bottom, 13)
-                            
-                            
-                            Text("Language : \(language)")
-                                .caseHistoryDetailText()
-                                .padding(.bottom, 18)
-                            
-                            
-                            Text("Medical Record :")
-                                .font(
-                                    .system(
-                                        size: 24,
-                                        weight: .bold
+                            if case .companion = completedCase.type {
+                                Text("Phone number: \(phoneNumber)")
+                                    .caseHistoryDetailText()
+                                    .padding(.bottom, 14)
+                            } else {
+                                Text("Age : \(age)")
+                                    .caseHistoryDetailText()
+                                    .padding(.bottom, 13)
+
+
+                                Text("Nationality : \(nationality)")
+                                    .caseHistoryDetailText()
+                                    .padding(.bottom, 13)
+
+
+                                Text("Language : \(language)")
+                                    .caseHistoryDetailText()
+                                    .padding(.bottom, 18)
+
+
+                                Text("Medical Record :")
+                                    .font(
+                                        .system(
+                                            size: 24,
+                                            weight: .bold
+                                        )
                                     )
-                                )
-                                .foregroundStyle(.black)
-                                .padding(.bottom, 13)
-                            
-                            
-                            Text("Gender : \(gender)")
-                                .caseHistoryDetailText()
-                                .padding(.bottom, 13)
-                            
-                            
-                            Text("Blood type : \(bloodType)")
-                                .caseHistoryDetailText()
-                                .padding(.bottom, 13)
-                            
-                            
-                            Text("Chronic diseases : \(chronicDiseases)")
-                                .caseHistoryDetailText()
-                                .padding(.bottom, 13)
-                            
-                            
-                            Text("Allergies: \(allergies)")
-                                .caseHistoryDetailText()
-                                .padding(.bottom, 13)
-                            
-                            
-                            Text("Medications : \(medications)")
-                                .caseHistoryDetailText()
-                                .padding(.bottom, 13)
-                            
-                            
-                            Text("Other info : \(otherInfo)")
-                                .caseHistoryDetailText()
-                                .fixedSize(
-                                    horizontal: false,
-                                    vertical: true
-                                )
-                                .padding(.bottom, 14)
-                            
-                            
+                                    .foregroundStyle(.black)
+                                    .padding(.bottom, 13)
+
+
+                                Text("Gender : \(gender)")
+                                    .caseHistoryDetailText()
+                                    .padding(.bottom, 13)
+
+
+                                Text("Blood type : \(bloodType)")
+                                    .caseHistoryDetailText()
+                                    .padding(.bottom, 13)
+
+
+                                Text("Chronic diseases : \(chronicDiseases)")
+                                    .caseHistoryDetailText()
+                                    .padding(.bottom, 13)
+
+
+                                Text("Allergies: \(allergies)")
+                                    .caseHistoryDetailText()
+                                    .padding(.bottom, 13)
+
+
+                                Text("Medications : \(medications)")
+                                    .caseHistoryDetailText()
+                                    .padding(.bottom, 13)
+
+
+                                Text("Other info : \(otherInfo)")
+                                    .caseHistoryDetailText()
+                                    .fixedSize(
+                                        horizontal: false,
+                                        vertical: true
+                                    )
+                                    .padding(.bottom, 14)
+                            }
+
                             Text("Case Description:")
                                 .font(
                                     .system(

@@ -105,7 +105,12 @@ final class ParamedicEmergencyRepository {
             "caseType": "patient", "pilgrimProfile": profile,
             "latitude": location.latitude, "longitude": location.longitude
         ]
-        if let companion = data["companionUsername"] as? String {
+        if data["isRequestForOther"] as? Bool == true {
+            history["caseType"] = "companion"
+            history["isRequestForOther"] = true
+            history["companionUsername"] = pilgrimUsername
+            history["companionProfile"] = profile
+        } else if let companion = data["companionUsername"] as? String {
             history["companionUsername"] = companion
             history["caseType"] = "companion"
             if let companionProfile = try await userData(username: companion) {
@@ -195,19 +200,27 @@ final class ParamedicEmergencyRepository {
                   let longitude = data["longitude"] as? Double,
                   let completedAt = data["completedAt"] as? Timestamp else { return nil }
             let type: EmergencyType
-            if let reporterData = data["companionProfile"] as? [String: Any],
-               let reporter = ParamedicEmergencySchema.pilgrim(reporterData) {
+            let caseType = (data["caseType"] as? String ?? "").lowercased()
+            let isRequestForOther = data["isRequestForOther"] as? Bool == true
+            let companionUsername = data["companionUsername"] as? String
+            if isRequestForOther || caseType == "report" || caseType == "companion"
+                || companionUsername != nil || data["companionProfile"] != nil {
+                // Never turn a report into a patient when its reporter profile is missing.
+                let reporterData = data["companionProfile"] as? [String: Any]
+                    ?? ((isRequestForOther || caseType == "report") ? profile : [:])
+                let reporter = ParamedicEmergencySchema.pilgrim(reporterData)
                 type = .companion(CompanionEmergencyReport(
-                    id: document.documentID, reporterName: reporter.fullName,
-                    reporterUsername: reporter.username, reporterPhoneNumber: reporter.phoneNumber,
-                    situationDescription: ""))
+                    id: document.documentID, reporterName: reporter?.fullName ?? "",
+                    reporterUsername: companionUsername ?? reporter?.username ?? "",
+                    reporterPhoneNumber: reporter?.phoneNumber ?? "",
+                    situationDescription: "", isRequestForOther: isRequestForOther || caseType == "report"))
             } else {
                 type = .patient(ParamedicDataMapper.makeEmergencyPatient(pilgrim: pilgrim, medicalRecord: medical))
             }
             return CompletedEmergency(
                 emergencyID: UUID(), type: type,
                 coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
-                description: data["description"] as? String ?? "", completedAt: completedAt.dateValue())
+                description: data["description"] as? String ?? data["AssistanceProvided"] as? String ?? "", completedAt: completedAt.dateValue())
         }
         // Read-only compatibility with existing history; no migration or deletion.
         if let legacy = try? await database.collection("PARAMEDIC")
@@ -223,11 +236,11 @@ final class ParamedicEmergencyRepository {
                           let medical = try await fetchLegacyMedical(username: username),
                           let location = try await fetchLegacyLocation(username: username) else { continue }
                     let type: EmergencyType
-                    if let companionName = data["CompanionUserName"] as? String,
-                       let companion = try await fetchLegacyPilgrim(username: companionName) {
+                    if let companionName = data["CompanionUserName"] as? String {
+                        let companion = try await fetchLegacyPilgrim(username: companionName)
                         type = .companion(CompanionEmergencyReport(
-                            id: String(describing: rawID), reporterName: companion.fullName,
-                            reporterUsername: companion.username, reporterPhoneNumber: companion.phoneNumber,
+                            id: String(describing: rawID), reporterName: companion?.fullName ?? "",
+                            reporterUsername: companionName, reporterPhoneNumber: companion?.phoneNumber ?? "",
                             situationDescription: ""))
                     } else {
                         type = .patient(ParamedicDataMapper.makeEmergencyPatient(pilgrim: pilgrim, medicalRecord: medical))
