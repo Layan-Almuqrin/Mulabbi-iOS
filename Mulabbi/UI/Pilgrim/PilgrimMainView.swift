@@ -16,14 +16,12 @@ struct PilgrimMainView: View {
     var body: some View {
         ZStack {
             TabView(selection: $selectedTab) {
-                HomeView(emergencyStore: companionEmergencyStore)
+                HomeView()
                     .tabItem { Label("Home", systemImage: "house.fill") }
                     .tag(0)
 
                 CompanionsView(
-                    store: companionsStore,
-                    emergencyStore: companionEmergencyStore,
-                    onIncomingSOS: { }
+                    store: companionsStore
                 )
                     .tabItem { Label("Companions", systemImage: "person.2.fill") }
                     .tag(1)

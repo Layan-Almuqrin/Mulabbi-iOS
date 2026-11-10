@@ -155,10 +155,6 @@ final class CompanionEmergencyStore: ObservableObject {
         }
     }
 
-    func receiveSOS(from companion: Companion) {
-        activeSOSRequest = companion
-    }
-
     func clearSOSRequest() {
         activeSOSRequest = nil
         activeSOSAlertId = nil
