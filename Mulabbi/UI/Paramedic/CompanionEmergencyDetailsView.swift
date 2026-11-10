@@ -11,6 +11,7 @@ struct CompanionEmergencyReport: Identifiable, Codable {
     var reporterUsername: String
     var reporterPhoneNumber: String
     var situationDescription: String
+    var isRequestForOther: Bool = false
 }
 
 
@@ -117,16 +118,18 @@ struct CompanionEmergencyDetailsView: View {
                     
                     
                     
-                    Text(report.reporterName)
-                        .font(
-                            .system(
-                                size: 30,
-                                weight: .semibold
+                    if !report.isRequestForOther {
+                        Text(report.reporterName)
+                            .font(
+                                .system(
+                                    size: 30,
+                                    weight: .semibold
+                                )
                             )
-                        )
-                        .foregroundStyle(.black)
-                        .padding(.top, 0)
-                        .padding(.bottom, 8)
+                            .foregroundStyle(.black)
+                            .padding(.top, 0)
+                            .padding(.bottom, 8)
+                    }
                     
                     
                   

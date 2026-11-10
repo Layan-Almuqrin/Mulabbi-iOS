@@ -9,4 +9,6 @@ struct CompanionReportModel: Identifiable, Codable {
     var pilgrimUsername: String
     
     var situationDescription: String
+
+    var isRequestForOther: Bool = false
 }

@@ -13,6 +13,8 @@ struct EmergencyAlertModel: Identifiable, Codable {
     var pilgrimUsername: String
     
     var companionUsername: String?
+
+    var isRequestForOther: Bool = false
     
     
     var status: String = "pending"
