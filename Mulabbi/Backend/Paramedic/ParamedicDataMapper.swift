@@ -63,7 +63,8 @@ enum ParamedicDataMapper {
             reporterName: reporterName,
             reporterUsername: companionReport.companionUsername,
             reporterPhoneNumber: reporterPhoneNumber,
-            situationDescription: companionReport.situationDescription
+            situationDescription: companionReport.situationDescription,
+            isRequestForOther: companionReport.isRequestForOther
         )
     }
     

@@ -16,6 +16,7 @@ enum ParamedicEmergencySchema {
             paramedicUsername: data["PAUsername"] as? String,
             pilgrimUsername: pilgrim,
             companionUsername: data["companionUsername"] as? String,
+            isRequestForOther: data["isRequestForOther"] as? Bool ?? false,
             status: data["status"] as? String ?? "pending"
         )
     }

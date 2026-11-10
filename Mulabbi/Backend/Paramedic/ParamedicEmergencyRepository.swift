@@ -151,7 +151,21 @@ final class ParamedicEmergencyRepository {
             try Task.checkCancellation()
             guard let location = try await fetchLocation(alertID: alert.alertID),
                   ParamedicEmergencySchema.sameUsername(location.pilgrimUsername, alert.pilgrimUsername) else { continue }
-            if let companionUsername = alert.companionUsername,
+            if alert.isRequestForOther,
+               let reporter = try await fetchPilgrim(username: alert.pilgrimUsername) {
+                locations.append(ParamedicDataMapper.makeCompanionEmergencyLocation(
+                    alert: alert, location: location,
+                    companionReport: CompanionReportModel(
+                        id: alert.alertID,
+                        companionUsername: alert.pilgrimUsername,
+                        pilgrimUsername: alert.pilgrimUsername,
+                        situationDescription: alert.description,
+                        isRequestForOther: true
+                    ),
+                    reporterName: reporter.fullName,
+                    reporterPhoneNumber: reporter.phoneNumber
+                ))
+            } else if let companionUsername = alert.companionUsername,
                let companion = try await fetchPilgrim(username: companionUsername) {
                 locations.append(ParamedicDataMapper.makeCompanionEmergencyLocation(
                     alert: alert, location: location,

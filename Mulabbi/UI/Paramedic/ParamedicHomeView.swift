@@ -40,6 +40,7 @@ struct ParamedicHomeView: View {
     
     @State private var isMapVisible = false
     @StateObject private var mapRoute = ParamedicMapRoute()
+    @StateObject private var profileStore = ParamedicSettingsStore()
     @State private var cameraPosition: MapCameraPosition = .region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(
@@ -173,7 +174,7 @@ struct ParamedicHomeView: View {
                             )
                         
                         
-                        Text("Welcome \(emergencyStore.currentParamedicUsername) !")
+                        Text("Welcome \(profileStore.profile.firstName.isEmpty ? emergencyStore.currentParamedicUsername : profileStore.profile.firstName) !")
                             .font(
                                 .system(
                                     size: 23,
@@ -201,6 +202,7 @@ struct ParamedicHomeView: View {
         )
         .task {
             await emergencyStore.loadEmergencies()
+            await profileStore.fetch()
         }
     }
 }

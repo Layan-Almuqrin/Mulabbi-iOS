@@ -22,7 +22,7 @@ private enum PendingAction {
 }
 
 private enum HomeAlert: Identifiable {
-    case locationNeeded, confirmSOS, paramedicOnWay, confirmOthers, requestSent, disconnectWatch, outsideServiceArea
+    case locationNeeded, confirmSOS, paramedicOnWay, confirmOthers, disconnectWatch, outsideServiceArea
     var id: String {
         switch self {
         case .locationNeeded: "locationNeeded"
@@ -30,7 +30,6 @@ private enum HomeAlert: Identifiable {
         case .confirmSOS: "confirmSOS"
         case .paramedicOnWay: "paramedicOnWay"
         case .confirmOthers: "confirmOthers"
-        case .requestSent: "requestSent"
         case .disconnectWatch: "disconnectWatch"
         }
     }
@@ -42,7 +41,6 @@ private enum HomeAlert: Identifiable {
         case .confirmSOS: appLocalized("Are you sure you want to send an SOS?")
         case .paramedicOnWay: appLocalized("A paramedic is on the way to help you.")
         case .confirmOthers: appLocalized("Are you sure you want to send help to another person?")
-        case .requestSent: appLocalized("A paramedic is on the way to help you.")
         case .disconnectWatch: appLocalized("Disconnect Apple Watch?")
         }
     }
@@ -416,7 +414,7 @@ struct HomeView: View {
             continueAfterLocationCheck()
         case .confirmSOS:
             dispatchParamedic()
-        case .paramedicOnWay, .requestSent, .outsideServiceArea:
+        case .paramedicOnWay, .outsideServiceArea:
             dismissHomeAlert()
         case .confirmOthers:
             activeAlert = nil
@@ -494,7 +492,6 @@ struct HomeView: View {
                             requestDetails = ""
                             requestForOthersLocation = nil
                             pendingAction = nil
-                            activeAlert = .requestSent
                         }
                     }
                 }
@@ -552,7 +549,7 @@ private struct HomeAlertOverlay: View {
         switch alert {
         case .locationNeeded: appLocalized("Allow")
         case .confirmSOS: appLocalized("Send")
-        case .paramedicOnWay, .requestSent, .outsideServiceArea: appLocalized("OK")
+        case .paramedicOnWay, .outsideServiceArea: appLocalized("OK")
         case .confirmOthers: appLocalized("Yes")
         case .disconnectWatch: appLocalized("Disconnect")
         }
@@ -562,7 +559,7 @@ private struct HomeAlertOverlay: View {
         switch alert {
         case .locationNeeded: appLocalized("Don't Allow")
         case .confirmSOS, .confirmOthers, .disconnectWatch: appLocalized("Cancel")
-        case .paramedicOnWay, .requestSent, .outsideServiceArea: nil        }
+        case .paramedicOnWay, .outsideServiceArea: nil        }
     }
 
     private func alertButton(_ title: String, action: @escaping () -> Void) -> some View {
@@ -655,6 +652,7 @@ private struct RequestForOthersDetailsView: View {
     @Binding var details: String
     let onSend: () -> Void
     @AppStorage("appLanguage") private var appLanguage = "en"
+    @FocusState private var isEditingDetails: Bool
 
     var body: some View {
         NavigationStack {
@@ -666,12 +664,14 @@ private struct RequestForOthersDetailsView: View {
                 Text("Describe the Situation")
                     .font(.headline)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .environment(\.layoutDirection, .leftToRight)
 
                 ZStack(alignment: .topLeading) {
                     TextEditor(text: $details)
                         .font(.body)
                         .multilineTextAlignment(.leading)
-                        .environment(\.layoutDirection, appLanguage == "ar" ? .rightToLeft : .leftToRight)
+                        .environment(\.layoutDirection, .leftToRight)
+                        .focused($isEditingDetails)
                         .scrollContentBackground(.hidden)
                         .padding(8)
                         .background(.white)
@@ -685,6 +685,7 @@ private struct RequestForOthersDetailsView: View {
                             .allowsHitTesting(false)
                     }
                 }
+                .environment(\.layoutDirection, .leftToRight)
                 .frame(maxHeight: .infinity)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
@@ -703,9 +704,12 @@ private struct RequestForOthersDetailsView: View {
             }
             .padding(24)
             .background(Color(.systemGroupedBackground))
+            .onAppear {
+                isEditingDetails = true
+            }
             .toolbar {
                 ToolbarItem(
-                    placement: appLanguage == "ar" ? .topBarLeading : .topBarTrailing
+                    placement: .topBarLeading
                 ) {
                     Button {
                         dismiss()
