@@ -210,9 +210,9 @@ struct ParamedicHomeView: View {
 
 struct EmergencyLocation: Identifiable {
     
-    let id = UUID()
+    let id: UUID
     
-    let alertID: Int?
+    let alertID: String?
     
     let coordinate: CLLocationCoordinate2D
     
@@ -220,11 +220,13 @@ struct EmergencyLocation: Identifiable {
     
     
     init(
-        alertID: Int? = nil,
+        id: UUID = UUID(),
+        alertID: String? = nil,
         coordinate: CLLocationCoordinate2D,
         type: EmergencyType
     ) {
         
+        self.id = id
         self.alertID = alertID
         self.coordinate = coordinate
         self.type = type

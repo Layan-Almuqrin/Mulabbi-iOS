@@ -1,488 +1,265 @@
 import Foundation
+import FirebaseAuth
 import FirebaseFirestore
+import MapKit
 
 final class ParamedicEmergencyRepository {
-    
     static let shared = ParamedicEmergencyRepository()
-    
-    private let firestoreService: FirestoreService
-    
-    // يجهّز خدمة قاعدة البيانات المستخدمة في عمليات البلاغات.
-    private init(
-        firestoreService: FirestoreService = .shared
-    ) {
-        self.firestoreService = firestoreService
-    }
-    
-    
-    // يجيب مستندات البلاغات ويحوّلها إلى نماذج، ويتجاوز المستندات الناقصة.
+    private let database = Firestore.firestore()
+    private init() {}
+
     func fetchEmergencyAlerts() async throws -> [EmergencyAlertModel] {
-        
-        let documents = try await firestoreService.fetchEmergencyAlerts(
-            from: FirestoreCollections.emergencyAlert
-        )
-        
-        return documents.compactMap { document in
-            
-            let data = document.data()
-            
-            guard
-                let alertID = data["AlertID"] as? Int,
-                let description = data["Description"] as? String,
-                let timestamp = data["Time"] as? Timestamp,
-                let pilgrimUsername = data["PI_Username"] as? String
-            else {
-                return nil
-            }
-            
-            return EmergencyAlertModel(
-                alertID: alertID,
-                description: description,
-                time: timestamp.dateValue(),
-                paramedicUsername: data["PA_Username"] as? String,
-                pilgrimUsername: pilgrimUsername,
-                companionUsername: data["CompanionUserName"] as? String
-            )
+        let snapshot = try await database.collection(ParamedicEmergencySchema.alerts).getDocuments()
+        return snapshot.documents.compactMap {
+            ParamedicEmergencySchema.decodeAlert(id: $0.documentID, data: $0.data())
         }
     }
-    
-        // يبحث باسم مستخدم الحاج ويرجع موقعه، أو nil إذا لم تتوفر بيانات الموقع المطلوبة.
-        func fetchLocation(
-        for pilgrimUsername: String
-    ) async throws -> LocationModel? {
-        
-        let documents = try await firestoreService.fetchDocuments(
-            from: FirestoreCollections.location
-        )
-        
-        guard let document = documents.first(
-            where: {
-                $0.data()["PI_Username"] as? String == pilgrimUsername
-            }
-        ) else {
-            return nil
-        }
-        
-        let data = document.data()
-        
-        guard
-            let latitude = data["Latitude"] as? Double,
-            let longitude = data["Longitude"] as? Double,
-            let timestamp = data["TimeStamp"] as? Timestamp
-        else {
-            return nil
-        }
-        
-        return LocationModel(
-            latitude: latitude,
-            longitude: longitude,
-            timeStamp: timestamp.dateValue(),
-            pilgrimUsername: pilgrimUsername
-        )
+
+    /// The alert ID is essential: one pilgrim can have several location records.
+    func fetchLocation(alertID: String) async throws -> LocationModel? {
+        let snapshot = try await database.collection(ParamedicEmergencySchema.locations)
+            .whereField("alertId", isEqualTo: alertID).getDocuments()
+        return snapshot.documents.compactMap { ParamedicEmergencySchema.location($0.data()) }
+            .max { $0.timeStamp < $1.timeStamp }
     }
-    
-    
-    // يجيب بيانات الحاج حسب اسم المستخدم ويتأكد من وجود الحقول الأساسية.
-    func fetchPilgrim(
-        username: String
-    ) async throws -> PilgrimModel? {
-        
-        let documents = try await firestoreService.fetchDocuments(
-            from: FirestoreCollections.pilgrim
-        )
-        
-        guard let document = documents.first(
-            where: {
-                $0.data()["PI_Username"] as? String == username
+
+    private func userData(username: String) async throws -> [String: Any]? {
+        // Use the same username registry as login, then fall back to the exact
+        // username query used by the companion code (for existing profiles).
+        let key = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let identity = try await database.collection("usernames").document(key).getDocument()
+        if let uid = identity.data()?["uid"] as? String {
+            let profile = try await database.collection(ParamedicEmergencySchema.users).document(uid).getDocument()
+            if let data = profile.data(),
+               ParamedicEmergencySchema.sameUsername(data["username"] as? String ?? "", username) {
+                return data
             }
-        ) else {
-            return nil
         }
-        
-        let data = document.data()
-        
-        guard
-            let email = data["Email"] as? String,
-            let nationality = data["Nationality"] as? String,
-            let language = data["Language"] as? String,
-            let age = data["Age"] as? Int,
-            let firstName = data["Fname"] as? String,
-            let lastName = data["Lname"] as? String,
-            let phoneNumber = data["PhoneNumber"] as? String
-        else {
-            return nil
-        }
-        
-        return PilgrimModel(
-            username: username,
-            email: email,
-            nationality: nationality,
-            language: language,
-            age: age,
-            firstName: firstName,
-            lastName: lastName,
-            phoneNumber: phoneNumber,
-            heartRate: data["Heart_rate"] as? Double
-        )
+        let profiles = try await database.collection(ParamedicEmergencySchema.users)
+            .whereField("username", isEqualTo: username).limit(to: 1).getDocuments()
+        return profiles.documents.first?.data()
     }
-    
-    
-    // يجيب السجل الطبي المرتبط باسم مستخدم الحاج.
-    func fetchMedicalRecord(
-        for pilgrimUsername: String
-    ) async throws -> MedicalRecordModel? {
-        
-        let documents = try await firestoreService.fetchDocuments(
-            from: FirestoreCollections.medicalRecord
-        )
-        
-        guard let document = documents.first(
-            where: {
-                $0.data()["PI_Username"] as? String == pilgrimUsername
-            }
-        ) else {
-            return nil
-        }
-        
-        let data = document.data()
-        
-        guard
-            let gender = data["Gender"] as? String,
-            let medications = data["Medications"] as? String,
-            let bloodType = data["BloodType"] as? String,
-            let allergies = data["Allergies"] as? String,
-            let chronicDiseases = data["ChronicDiseases"] as? String
-        else {
-            return nil
-        }
-        
-        return MedicalRecordModel(
-            gender: gender,
-            medications: medications,
-            bloodType: bloodType,
-            allergies: allergies,
-            chronicDiseases: chronicDiseases,
-            otherInfo: data["OtherInfo"] as? String,
-            pilgrimUsername: pilgrimUsername
-        )
+
+    func fetchPilgrim(username: String) async throws -> PilgrimModel? {
+        guard let data = try await userData(username: username) else { return nil }
+        return ParamedicEmergencySchema.pilgrim(data)
     }
-    
-        // يبحث عن البلاغ برقمه ويحدّث اسم المسعف المسؤول عنه.
-        func acceptEmergency(
-        alertID: Int,
-        paramedicUsername: String
-    ) async throws {
-        
-        let documents = try await firestoreService.fetchDocuments(
-            from: FirestoreCollections.emergencyAlert
-        )
-        
-        guard let document = documents.first(
-            where: {
-                $0.data()["AlertID"] as? Int == alertID
-            }
-        ) else {
-            throw NSError(
-                domain: "Emergency",
-                code: 404,
-                userInfo: [
-                    NSLocalizedDescriptionKey:
-                        "Emergency alert was not found."
-                ]
-            )
+
+    func fetchMedicalRecord(for username: String) async throws -> MedicalRecordModel? {
+        guard let data = try await userData(username: username),
+              data["role"] as? String == "pilgrim" else { return nil }
+        return ParamedicEmergencySchema.medical(data)
+    }
+
+    private func paramedicProfile(username: String) async throws -> (DocumentReference, String) {
+        guard let uid = Auth.auth().currentUser?.uid else { throw failure("Please sign in again.") }
+        let reference = database.collection(ParamedicEmergencySchema.users).document(uid)
+        let snapshot = try await reference.getDocument()
+        guard let data = snapshot.data(), data["role"] as? String == "paramedic",
+              let canonical = data["username"] as? String,
+              ParamedicEmergencySchema.sameUsername(canonical, username) else {
+            throw failure("The signed-in paramedic does not match this account.")
         }
-        
-        let documentReference = Firestore.firestore()
-            .collection(FirestoreCollections.emergencyAlert)
-            .document(document.documentID)
-        
-        try await withCheckedThrowingContinuation {
-            (continuation: CheckedContinuation<Void, Error>) in
-            
-            Firestore.firestore().runTransaction({
-                transaction,
-                errorPointer -> Any? in
-                
-                let snapshot: DocumentSnapshot
-                
+        return (reference, canonical)
+    }
+
+    func acceptEmergency(alertID: String, paramedicUsername: String) async throws {
+        let (_, username) = try await paramedicProfile(username: paramedicUsername)
+        let alert = database.collection(ParamedicEmergencySchema.alerts).document(alertID)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            database.runTransaction({ transaction, errorPointer -> Any? in
                 do {
-                    snapshot = try transaction.getDocument(
-                        documentReference
-                    )
-                } catch let error as NSError {
-                    errorPointer?.pointee = error
-                    return nil
-                }
-                
-                let data = snapshot.data() ?? [:]
-                
-                if let existingParamedic =
-                    data["PA_Username"] as? String,
-                   !existingParamedic.isEmpty,
-                   existingParamedic != paramedicUsername {
-                    
-                    errorPointer?.pointee = NSError(
-                        domain: "Emergency",
-                        code: 409,
-                        userInfo: [
-                            NSLocalizedDescriptionKey:
-                                "This emergency has already been accepted by another paramedic."
-                        ]
-                    )
-                    
-                    return nil
-                }
-                
-                transaction.updateData(
-                    [
-                        "PA_Username": paramedicUsername
-                    ],
-                    forDocument: documentReference
-                )
-                
+                    let snapshot = try transaction.getDocument(alert)
+                    guard let data = snapshot.data() else { throw self.failure("This request no longer exists.") }
+                    guard ParamedicEmergencySchema.canAccept(data, username: username) else {
+                        throw self.failure("This request has already been accepted or closed.")
+                    }
+                    transaction.updateData([
+                        "PAUsername": username, "status": "accepted",
+                        "acceptedAt": FieldValue.serverTimestamp()
+                    ], forDocument: alert)
+                } catch { errorPointer?.pointee = error as NSError }
                 return nil
-                
             }) { _, error in
-                
-                if let error = error {
-                    continuation.resume(
-                        throwing: error
-                    )
-                } else {
-                    continuation.resume()
-                }
+                if let error { continuation.resume(throwing: error) }
+                else { continuation.resume() }
             }
         }
     }
-    
-    // يضيف تفاصيل الحالة والمساعدة المقدمة إلى سجل المسعف، مع اسم المرافق اذا وجد.
-    func addCaseHistory(
-        paramedicUsername: String,
-        alertID: Int,
-        pilgrimUsername: String,
-        companionUsername: String?,
-        caseType: CaseHistoryType,
-        assistanceProvided: String
-    ) async throws {
-        
-        let documents = try await firestoreService.fetchDocuments(
-            from: FirestoreCollections.paramedic
-        )
-        
-        guard let document = documents.first(
-            where: {
-                $0.data()["PA_Username"] as? String == paramedicUsername
-            }
-        ) else {
-            return
+
+    /// History and status are committed atomically. Keep the original document
+    /// so the pilgrim's existing status listener can observe completion.
+    func completeEmergency(alertID: String, paramedicUsername: String, description: String) async throws {
+        let (paramedic, username) = try await paramedicProfile(username: paramedicUsername)
+        let alert = database.collection(ParamedicEmergencySchema.alerts).document(alertID)
+        let alertSnapshot = try await alert.getDocument()
+        guard let data = alertSnapshot.data(),
+              let pilgrimUsername = data["PIUsername"] as? String,
+              let profile = try await userData(username: pilgrimUsername),
+              let location = try await fetchLocation(alertID: alertID) else {
+            throw failure("The request or patient details are unavailable. Please try again.")
         }
-        
-        var caseHistoryEntry: [String: Any] = [
-            "AlertID": alertID,
-            "PI_Username": pilgrimUsername,
-            "CaseType": caseType.rawValue,
-            "AssistanceProvided": assistanceProvided,
-            "CompletedAt": Timestamp(date: Date())
+        var history: [String: Any] = [
+            "alertId": alertID, "PIUsername": pilgrimUsername, "PAUsername": username,
+            "description": description, "completedAt": FieldValue.serverTimestamp(),
+            "caseType": "patient", "pilgrimProfile": profile,
+            "latitude": location.latitude, "longitude": location.longitude
         ]
-        
-        if let companionUsername {
-            caseHistoryEntry["CompanionUserName"] = companionUsername
-        }
-        
-        try await Firestore.firestore()
-            .collection(FirestoreCollections.paramedic)
-            .document(document.documentID)
-            .updateData([
-                "PA_CaseHistory": FieldValue.arrayUnion([
-                    caseHistoryEntry
-                ])
-            ])
-    }
-    
-   
-    // يقرأ سجل المسعف ويحوّله إلى حالات مرتبة من الأحدث إلى الأقدم.
-    func fetchCaseHistory(
-        paramedicUsername: String
-    ) async throws -> [CaseHistoryModel] {
-        
-        let documents = try await firestoreService.fetchDocuments(
-            from: FirestoreCollections.paramedic
-        )
-        
-        guard let document = documents.first(
-            where: {
-                $0.data()["PA_Username"] as? String == paramedicUsername
+        if let companion = data["companionUsername"] as? String {
+            history["companionUsername"] = companion
+            history["caseType"] = "companion"
+            if let companionProfile = try await userData(username: companion) {
+                history["companionProfile"] = companionProfile
             }
-        ) else {
-            return []
         }
-        
-        let data = document.data()
-        
-        guard
-            let history = data["PA_CaseHistory"] as? [[String: Any]]
-        else {
-            return []
-        }
-        
-        let cases = history.compactMap {
-            item -> CaseHistoryModel? in
-            
-            guard
-                let alertID = item["AlertID"] as? Int,
-                let pilgrimUsername = item["PI_Username"] as? String,
-                let assistanceProvided =
-                    item["AssistanceProvided"] as? String,
-                let completedAt =
-                    item["CompletedAt"] as? Timestamp
-            else {
+        let historyData = history
+        let historyReference = paramedic.collection("caseHistory").document(alertID)
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            database.runTransaction({ transaction, errorPointer -> Any? in
+                do {
+                    let current = try transaction.getDocument(alert)
+                    let previousHistory = try transaction.getDocument(historyReference)
+                    guard let latest = current.data() else { throw self.failure("This request no longer exists.") }
+                    // A retry after a successful commit must not duplicate history.
+                    if latest["status"] as? String == "completed",
+                       ParamedicEmergencySchema.sameUsername(latest["PAUsername"] as? String ?? "", username),
+                       previousHistory.exists { return nil }
+                    guard ParamedicEmergencySchema.canComplete(latest, username: username),
+                          latest["PIUsername"] as? String == pilgrimUsername else {
+                        throw self.failure("Only the paramedic assigned to this request can complete it.")
+                    }
+                    transaction.setData(historyData, forDocument: historyReference)
+                    transaction.updateData([
+                        "status": "completed", "completedAt": FieldValue.serverTimestamp()
+                    ], forDocument: alert)
+                } catch { errorPointer?.pointee = error as NSError }
                 return nil
+            }) { _, error in
+                if let error { continuation.resume(throwing: error) }
+                else { continuation.resume() }
             }
-            
-            let caseTypeRawValue =
-                item["CaseType"] as? String
-                ?? CaseHistoryType.patient.rawValue
-            
-            let caseType =
-                CaseHistoryType(
-                    rawValue: caseTypeRawValue
-                ) ?? .patient
-            
-            return CaseHistoryModel(
-                id: UUID().uuidString,
-                alertID: alertID,
-                paramedicUsername: paramedicUsername,
-                pilgrimUsername: pilgrimUsername,
-                companionUsername:
-                    item["CompanionUserName"] as? String,
-                caseType: caseType,
-                assistanceProvided: assistanceProvided,
-                completedAt: completedAt.dateValue()
-            )
-        }
-        
-        return cases.sorted {
-            $0.completedAt > $1.completedAt
         }
     }
-    
-    
-    // يحذف مستند البلاغ المطابق لرقم البلاغ المحدد.
-    func deleteEmergencyAlert(
-        alertID: Int
-    ) async throws {
-        
-        let documents = try await firestoreService.fetchDocuments(
-            from: FirestoreCollections.emergencyAlert
-        )
-        
-        guard let document = documents.first(
-            where: {
-                $0.data()["AlertID"] as? Int == alertID
-            }
-        ) else {
-            return
+
+    func fetchActiveEmergencies(paramedicUsername: String) async throws -> [EmergencyLocation] {
+        guard !paramedicUsername.isEmpty else { return [] }
+        let alerts = try await fetchEmergencyAlerts().filter {
+            ParamedicEmergencySchema.isVisible($0, to: paramedicUsername)
         }
-        
-        try await firestoreService.deleteDocument(
-            collectionName: FirestoreCollections.emergencyAlert,
-            documentID: document.documentID
-        )
-    }
-    
-        // يجمع بيانات كل بلاغ مع الموقع وبيانات الحاج أو المرافق لتجهيز نقاط الخريطة.
-        func fetchActiveEmergencies(
-        paramedicUsername: String
-    ) async throws -> [EmergencyLocation] {
-        
-        let allAlerts = try await fetchEmergencyAlerts()
-        
-        let alerts = allAlerts.filter { alert in
-            
-            guard
-                let assignedParamedic = alert.paramedicUsername,
-                !assignedParamedic.isEmpty
-            else {
-                return true
-            }
-            
-            return assignedParamedic == paramedicUsername
-        }
-        
-        var emergencyLocations: [EmergencyLocation] = []
-        
+        var locations: [EmergencyLocation] = []
         for alert in alerts {
-            
-            guard
-                let location = try await fetchLocation(
-                    for: alert.pilgrimUsername
-                )
-            else {
-                continue
+            try Task.checkCancellation()
+            guard let location = try await fetchLocation(alertID: alert.alertID),
+                  ParamedicEmergencySchema.sameUsername(location.pilgrimUsername, alert.pilgrimUsername) else { continue }
+            if let companionUsername = alert.companionUsername,
+               let companion = try await fetchPilgrim(username: companionUsername) {
+                locations.append(ParamedicDataMapper.makeCompanionEmergencyLocation(
+                    alert: alert, location: location,
+                    companionReport: CompanionReportModel(
+                        id: alert.alertID, companionUsername: companionUsername,
+                        pilgrimUsername: alert.pilgrimUsername, situationDescription: alert.description),
+                    reporterName: companion.fullName, reporterPhoneNumber: companion.phoneNumber
+                ))
+            } else if let pilgrim = try await fetchPilgrim(username: alert.pilgrimUsername),
+                      let medical = try await fetchMedicalRecord(for: alert.pilgrimUsername) {
+                locations.append(ParamedicDataMapper.makeEmergencyLocation(
+                    alert: alert, location: location, pilgrim: pilgrim, medicalRecord: medical))
             }
-            
-          
-            if let companionUsername = alert.companionUsername {
-                
-                guard
-                    let companion = try await fetchPilgrim(
-                        username: companionUsername
-                    )
-                else {
-                    continue
-                }
-                
-                let companionReport = CompanionReportModel(
-                    id: String(alert.alertID),
-                    companionUsername: companionUsername,
-                    pilgrimUsername: alert.pilgrimUsername,
-                    situationDescription: alert.description
-                )
-                
-                let emergencyLocation =
-                    ParamedicDataMapper
-                    .makeCompanionEmergencyLocation(
-                        alert: alert,
-                        location: location,
-                        companionReport: companionReport,
-                        reporterName: companion.fullName,
-                        reporterPhoneNumber:
-                            companion.phoneNumber
-                    )
-                
-                emergencyLocations.append(
-                    emergencyLocation
-                )
-                
-                continue
-            }
-            
-           
-            guard
-                let pilgrim = try await fetchPilgrim(
-                    username: alert.pilgrimUsername
-                ),
-                let medicalRecord =
-                    try await fetchMedicalRecord(
-                        for: alert.pilgrimUsername
-                    )
-            else {
-                continue
-            }
-            
-            let emergencyLocation =
-                ParamedicDataMapper.makeEmergencyLocation(
-                    alert: alert,
-                    location: location,
-                    pilgrim: pilgrim,
-                    medicalRecord: medicalRecord
-                )
-            
-            emergencyLocations.append(
-                emergencyLocation
-            )
         }
-        
-        return emergencyLocations
+        return locations
+    }
+
+    func fetchCompletedEmergencies(paramedicUsername: String) async throws -> [CompletedEmergency] {
+        let (paramedic, _) = try await paramedicProfile(username: paramedicUsername)
+        let snapshot = try await paramedic.collection("caseHistory").getDocuments()
+        var cases: [CompletedEmergency] = snapshot.documents.compactMap { document in
+            let data = document.data()
+            guard let profile = data["pilgrimProfile"] as? [String: Any],
+                  let pilgrim = ParamedicEmergencySchema.pilgrim(profile),
+                  let medical = ParamedicEmergencySchema.medical(profile),
+                  let latitude = data["latitude"] as? Double,
+                  let longitude = data["longitude"] as? Double,
+                  let completedAt = data["completedAt"] as? Timestamp else { return nil }
+            let type: EmergencyType
+            if let reporterData = data["companionProfile"] as? [String: Any],
+               let reporter = ParamedicEmergencySchema.pilgrim(reporterData) {
+                type = .companion(CompanionEmergencyReport(
+                    id: document.documentID, reporterName: reporter.fullName,
+                    reporterUsername: reporter.username, reporterPhoneNumber: reporter.phoneNumber,
+                    situationDescription: ""))
+            } else {
+                type = .patient(ParamedicDataMapper.makeEmergencyPatient(pilgrim: pilgrim, medicalRecord: medical))
+            }
+            return CompletedEmergency(
+                emergencyID: UUID(), type: type,
+                coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+                description: data["description"] as? String ?? "", completedAt: completedAt.dateValue())
+        }
+        // Read-only compatibility with existing history; no migration or deletion.
+        if let legacy = try? await database.collection("PARAMEDIC")
+            .whereField("PA_Username", isEqualTo: paramedicUsername).getDocuments() {
+            let newIDs = Set(snapshot.documents.map(\.documentID))
+            for document in legacy.documents {
+                for data in document.data()["PA_CaseHistory"] as? [[String: Any]] ?? [] {
+                    guard let rawID = data["AlertID"],
+                          !newIDs.contains(String(describing: rawID)),
+                          let username = data["PI_Username"] as? String,
+                          let completedAt = data["CompletedAt"] as? Timestamp,
+                          let pilgrim = try await fetchLegacyPilgrim(username: username),
+                          let medical = try await fetchLegacyMedical(username: username),
+                          let location = try await fetchLegacyLocation(username: username) else { continue }
+                    let type: EmergencyType
+                    if let companionName = data["CompanionUserName"] as? String,
+                       let companion = try await fetchLegacyPilgrim(username: companionName) {
+                        type = .companion(CompanionEmergencyReport(
+                            id: String(describing: rawID), reporterName: companion.fullName,
+                            reporterUsername: companion.username, reporterPhoneNumber: companion.phoneNumber,
+                            situationDescription: ""))
+                    } else {
+                        type = .patient(ParamedicDataMapper.makeEmergencyPatient(pilgrim: pilgrim, medicalRecord: medical))
+                    }
+                    cases.append(CompletedEmergency(
+                        emergencyID: UUID(), type: type,
+                        coordinate: CLLocationCoordinate2D(latitude: location.latitude, longitude: location.longitude),
+                        description: data["AssistanceProvided"] as? String ?? "", completedAt: completedAt.dateValue()))
+                }
+            }
+        }
+        return cases.sorted { $0.completedAt > $1.completedAt }
+    }
+
+    private func legacyData(collection: String, username: String) async throws -> [String: Any]? {
+        let snapshot = try await database.collection(collection)
+            .whereField("PI_Username", isEqualTo: username).limit(to: 1).getDocuments()
+        return snapshot.documents.first?.data()
+    }
+    private func fetchLegacyPilgrim(username: String) async throws -> PilgrimModel? {
+        guard var data = try await legacyData(collection: "PILGRIM", username: username) else { return nil }
+        data["role"] = "pilgrim"; data["username"] = username
+        for (old, new) in [("Fname", "firstName"), ("Lname", "lastName"), ("Email", "email"),
+                           ("Age", "age"), ("Nationality", "nationality"), ("PhoneNumber", "phoneNumber")] {
+            data[new] = data[old]
+        }
+        data["languages"] = [data["Language"] as? String ?? ""]
+        return ParamedicEmergencySchema.pilgrim(data)
+    }
+    private func fetchLegacyMedical(username: String) async throws -> MedicalRecordModel? {
+        guard let old = try await legacyData(collection: "MEDICAL_RECORD", username: username) else { return nil }
+        var record: [String: Any] = [:]
+        for (key, value) in [("Gender", "gender"), ("Medications", "medications"), ("BloodType", "bloodType"),
+                             ("Allergies", "allergies"), ("ChronicDiseases", "chronicDiseases"), ("OtherInfo", "otherInfo")] {
+            record[value] = old[key]
+        }
+        return ParamedicEmergencySchema.medical(["username": username, "medicalRecord": record])
+    }
+    private func fetchLegacyLocation(username: String) async throws -> LocationModel? {
+        guard let data = try await legacyData(collection: "LOCATION", username: username),
+              let lat = data["Latitude"] as? Double, let lon = data["Longitude"] as? Double,
+              let time = data["TimeStamp"] as? Timestamp else { return nil }
+        return LocationModel(latitude: lat, longitude: lon, timeStamp: time.dateValue(), pilgrimUsername: username)
+    }
+
+    private func failure(_ message: String) -> NSError {
+        NSError(domain: "ParamedicEmergency", code: 1, userInfo: [NSLocalizedDescriptionKey: message])
     }
 }

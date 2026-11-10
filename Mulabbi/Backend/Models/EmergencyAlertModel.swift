@@ -2,7 +2,7 @@ import Foundation
 
 struct EmergencyAlertModel: Identifiable, Codable {
     
-    var alertID: Int
+    var alertID: String
     
     var description: String
     
@@ -15,7 +15,9 @@ struct EmergencyAlertModel: Identifiable, Codable {
     var companionUsername: String?
     
     
-    var id: Int {
+    var status: String = "pending"
+
+    var id: String {
         alertID
     }
 }
