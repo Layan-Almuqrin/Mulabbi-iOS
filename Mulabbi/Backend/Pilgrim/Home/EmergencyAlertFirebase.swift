@@ -95,7 +95,9 @@ final class EmergencyAlertFirebase {
             .whereField("companionUsernames", arrayContains: companionUsername)
             .addSnapshotListener { snapshot, _ in
                 guard
-                    let document = snapshot?.documents.first,
+                    let document = snapshot?.documents.first(where: {
+                        ($0["status"] as? String ?? "pending") == "pending"
+                    }),
                     let pilgrimUsername = document["PIUsername"] as? String
                 else {
                     return

@@ -3,8 +3,6 @@ import UIKit
 
 struct CompanionsView: View {
     @ObservedObject var store: CompanionsStore
-    @ObservedObject var emergencyStore: CompanionEmergencyStore
-    let onIncomingSOS: () -> Void
     @AppStorage("currentUsername") private var currentUsername = ""
 
     var body: some View {
@@ -139,6 +137,9 @@ private struct SearchCompanionsView: View {
     private let companionFirebase = CompanionFirebase()
     @State private var foundCompanion: Companion?
     @State private var phoneNumber = ""
+    @State private var countryRegion = "SA"
+    @State private var countryCode = "+966"
+    @State private var isShowingCountryPicker = false
     @State private var result: SearchResult = .none
     @State private var isRequestSent = false
 
@@ -150,23 +151,15 @@ private struct SearchCompanionsView: View {
                 Header(title: "Search") { dismiss() }
 
                 HStack(spacing: 10) {
-                    PhoneNumberTextField(
-                        text: $phoneNumber,
-                        placeholder: localizedPhonePlaceholder,
-                        textAlignment: layoutDirection == .rightToLeft ? .right : .left
-                    )
-                        .padding(.horizontal, 14)
-                        .frame(height: 48)
-                        .background(.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-                        .overlay { RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.25)) }
-
-                    Button("Search") { performSearch() }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .frame(width: 88, height: 44)
-                        .background(Color.mulabbiMaroon)
-                        .clipShape(Capsule())
+                    if appLanguage == "ar" {
+                        searchButton
+                        phoneField
+                        countryPicker
+                    } else {
+                        countryPicker
+                        phoneField
+                        searchButton
+                    }
                 }
                 .padding(.top, 20)
 
@@ -176,6 +169,12 @@ private struct SearchCompanionsView: View {
             .padding(.horizontal, 22)
         }
         .toolbar(.hidden, for: .navigationBar)
+        .sheet(isPresented: $isShowingCountryPicker) {
+            CountryCodePicker(
+                selectedRegion: $countryRegion,
+                selectedCode: $countryCode
+            )
+        }
     }
 
     @ViewBuilder
@@ -204,7 +203,19 @@ private struct SearchCompanionsView: View {
     }
     /// يبحث عن مستخدم مسجل برقم الجوال ويحدث نتيجة البحث في الواجهة.
     private func performSearch() {
-        let enteredPhoneNumber = phoneNumber.filter(\.isNumber)
+        var enteredPhoneNumber = phoneNumber.filter(\.isNumber)
+
+        let countryCodeDigits = countryCode.filter(\.isNumber)
+
+        if enteredPhoneNumber.hasPrefix(countryCodeDigits) {
+            enteredPhoneNumber.removeFirst(countryCodeDigits.count)
+        }
+
+        if enteredPhoneNumber.hasPrefix("0") {
+            enteredPhoneNumber.removeFirst()
+        }
+
+        let fullPhoneNumber = countryCodeDigits + enteredPhoneNumber
 
         guard !enteredPhoneNumber.isEmpty else {
             foundCompanion = nil
@@ -214,7 +225,7 @@ private struct SearchCompanionsView: View {
 
         isRequestSent = false
 
-        companionFirebase.findPilgrim(by: enteredPhoneNumber) { searchResult in
+        companionFirebase.findPilgrim(by: fullPhoneNumber) { searchResult in
             DispatchQueue.main.async {
                 switch searchResult {
                 case .success(let companion):
@@ -253,6 +264,54 @@ private struct SearchCompanionsView: View {
             value: "Enter Phone number...",
             table: "Localizable"
         )
+    }
+
+    private var phoneField: some View {
+        PhoneNumberTextField(
+            text: $phoneNumber,
+            placeholder: localizedPhonePlaceholder,
+            textAlignment: layoutDirection == .rightToLeft ? .right : .left
+        )
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity)
+        .frame(height: 48)
+        .background(.white)
+        .clipShape(RoundedRectangle(cornerRadius: 6))
+        .overlay { RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.25)) }
+    }
+
+    private var countryPicker: some View {
+        Button {
+            isShowingCountryPicker = true
+        } label: {
+            HStack(spacing: 4) {
+                Text(selectedCountry.flag)
+                Text(countryCode)
+                Image(systemName: "chevron.down")
+                    .font(.caption.weight(.semibold))
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(.primary)
+            .frame(width: 94, height: 48)
+            .background(.white)
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay { RoundedRectangle(cornerRadius: 6).stroke(Color.gray.opacity(0.25)) }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var selectedCountry: CountryDialCode {
+        CountryDialCode.supported.first(where: { $0.regionCode == countryRegion })
+            ?? CountryDialCode.supported[0]
+    }
+
+    private var searchButton: some View {
+        Button("Search") { performSearch() }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.white)
+            .frame(width: 88, height: 44)
+            .background(Color.mulabbiMaroon)
+            .clipShape(Capsule())
     }
 }
 
@@ -317,6 +376,7 @@ private struct Header: View {
                     .background(Color.mulabbiMaroon)
                     .clipShape(RoundedRectangle(cornerRadius: 16))
             }
+            .offset(x: layoutDirection == .rightToLeft ? 0 : 12)
             Spacer()
             Text(LocalizedStringKey(title)).font(.system(size: 26, weight: .bold))
             Spacer()
@@ -478,8 +538,6 @@ private var cardGradient: LinearGradient {
 
 #Preview {
     CompanionsView(
-        store: CompanionsStore(),
-        emergencyStore: CompanionEmergencyStore(),
-        onIncomingSOS: { }
+        store: CompanionsStore()
     )
 }

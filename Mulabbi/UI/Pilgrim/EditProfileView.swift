@@ -679,7 +679,7 @@ struct PhoneNumberField: View {
     }
 }
 
-private struct CountryCodePicker: View {
+struct CountryCodePicker: View {
     @Binding var selectedRegion: String
     @Binding var selectedCode: String
 
@@ -740,7 +740,7 @@ private struct CountryCodePicker: View {
     }
 }
 
-private final class PhoneNumberValidator {
+final class PhoneNumberValidator {
     static let shared = PhoneNumberValidator()
 
     let countryDialCodes: [CountryDialCode]
@@ -828,7 +828,7 @@ private final class PhoneNumberValidator {
     ]
 }
 
-private struct CountryDialCode: Identifiable {
+struct CountryDialCode: Identifiable {
     let regionCode: String
     let code: String
 

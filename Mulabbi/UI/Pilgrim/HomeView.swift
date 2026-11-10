@@ -1,6 +1,8 @@
 import SwiftUI
 import UIKit
 import CoreLocation
+import FirebaseAuth
+import FirebaseFirestore
 
 
 private var appLocale: Locale {
@@ -81,15 +83,13 @@ struct HomeView: View {
 
     /// يتحقق من أن موقع المستخدم داخل حدود الخدمة قبل إرسال طلب الطوارئ
     private let allowedAreaValidator = AllowedAreaValidator()
-    @ObservedObject var emergencyStore: CompanionEmergencyStore
-
     @State private var pendingAction: PendingAction?
     @State private var activeAlert: HomeAlert?
     @State private var showRequestDetailsSheet = false
     @State private var requestDetails = ""
     @State private var isSOSPulsing = false
     @State private var requestForOthersLocation: CLLocationCoordinate2D?
-    private let userName = "Shatha"
+    @State private var userName = ""
 
     var body: some View {
         ScrollView {
@@ -150,6 +150,7 @@ struct HomeView: View {
         }
         .onAppear {
             configureLocationCallbacks()
+            loadSignedInUsername()
         }
     }
 
@@ -378,6 +379,30 @@ struct HomeView: View {
             }
             }
         }
+    }
+
+    private func loadSignedInUsername() {
+        guard let userID = Auth.auth().currentUser?.uid else {
+            userName = ""
+            return
+        }
+
+        Firestore.firestore()
+            .collection("users")
+            .document(userID)
+            .getDocument { snapshot, _ in
+                guard let data = snapshot?.data(),
+                      let username = data["username"] as? String else {
+                    return
+                }
+
+                let firstName = data["firstName"] as? String ?? username
+
+                DispatchQueue.main.async {
+                    userName = firstName
+                    currentUsername = username
+                }
+            }
     }
 
     private func dismissHomeAlert() {
@@ -698,5 +723,5 @@ private struct RequestForOthersDetailsView: View {
 }
 
 #Preview {
-    HomeView(emergencyStore: CompanionEmergencyStore())
+    HomeView()
 }

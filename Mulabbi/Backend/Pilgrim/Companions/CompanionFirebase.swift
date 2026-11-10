@@ -180,13 +180,12 @@ final class CompanionFirebase {
                 "isAlertEnabled": isAlertEnabled
          ])
     }
-    /// يحضر المرافقين الذين قبلت طلباتهم للمستخدم من الداتابيس
     func fetchAcceptedCompanions(
         for username: String,
         completion: @escaping (Result<[Companion], Error>) -> Void
     ) {
         database.collection("companion_connections")
-            .whereField("companionUsername", isEqualTo: username)
+            .whereField("pilgrimUsername", isEqualTo: username)
             .getDocuments { snapshot, error in
                 if let error {
                     completion(.failure(error))
@@ -197,17 +196,17 @@ final class CompanionFirebase {
                     guard
                         let status = document["status"] as? String,
                         status == "accepted",
-                        let pilgrimName = document["pilgrimName"] as? String,
-                        let pilgrimUsername = document["pilgrimUsername"] as? String,
-                        let pilgrimPhoneNumber = document["pilgrimPhoneNumber"] as? String
+                        let companionName = document["companionName"] as? String,
+                        let companionUsername = document["companionUsername"] as? String,
+                        let companionPhoneNumber = document["companionPhoneNumber"] as? String
                     else {
                         return nil
                     }
 
                     return Companion(
-                        name: pilgrimName,
-                        username: pilgrimUsername,
-                        phoneNumber: pilgrimPhoneNumber,
+                        name: companionName,
+                        username: companionUsername,
+                        phoneNumber: companionPhoneNumber,
                         isAlertEnabled: document["isAlertEnabled"] as? Bool ?? true,
                         connectionId: document.documentID
                     )
