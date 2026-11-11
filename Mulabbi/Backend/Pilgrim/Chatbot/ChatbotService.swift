@@ -1,26 +1,32 @@
 import Foundation
+import FirebaseAuth
 
 struct ChatbotService {
     static let shared = ChatbotService()
 
-    // الرابط الخاص بالشات بوت هنا
-    private let chatbotURLString = ""
+    private let chatbotURLString = "https://us-central1-mulabbi-c10b7.cloudfunctions.net/chatbot"
 
-    func sendMessage(_ message: String) async throws -> String {
-        let trimmedURL = chatbotURLString.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        guard !trimmedURL.isEmpty else {
-            throw ChatbotServiceError.missingURL
-        }
-
-        guard let url = URL(string: trimmedURL) else {
+    func sendMessage(
+        _ message: String,
+        history: [ChatbotHistoryMessage]
+    ) async throws -> String {
+        guard let url = URL(string: chatbotURLString) else {
             throw ChatbotServiceError.invalidURL
         }
+
+        guard let user = Auth.auth().currentUser else {
+            throw ChatbotServiceError.notSignedIn
+        }
+
+        let idToken = try await user.getIDToken()
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(ChatbotRequest(message: message))
+        request.setValue("Bearer \(idToken)", forHTTPHeaderField: "Authorization")
+        request.httpBody = try JSONEncoder().encode(
+            ChatbotRequest(message: message, history: history)
+        )
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
@@ -40,15 +46,21 @@ struct ChatbotService {
     }
 }
 
+struct ChatbotHistoryMessage: Encodable {
+    let role: String
+    let content: String
+}
+
 enum ChatbotServiceError: Error {
-    case missingURL
     case invalidURL
+    case notSignedIn
     case serverError
     case emptyReply
 }
 
 private struct ChatbotRequest: Encodable {
     let message: String
+    let history: [ChatbotHistoryMessage]
 }
 
 private struct ChatbotResponse: Decodable {

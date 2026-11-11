@@ -217,6 +217,22 @@ struct ChatbotView: View {
             return
         }
 
+        let conversationHistory = messages
+            .filter { !$0.shouldLocalize }
+            .suffix(8)
+            .map { chatMessage in
+                let role: String
+
+                switch chatMessage.role {
+                case .assistant:
+                    role = "assistant"
+                case .user:
+                    role = "user"
+                }
+
+                return ChatbotHistoryMessage(role: role, content: chatMessage.text)
+            }
+
         withAnimation(.easeOut(duration: 0.2)) {
             messages.append(ChatMessage(role: .user, text: outgoingMessage))
         }
@@ -227,7 +243,10 @@ struct ChatbotView: View {
 
         Task {
             do {
-                let reply = try await ChatbotService.shared.sendMessage(outgoingMessage)
+                let reply = try await ChatbotService.shared.sendMessage(
+                    outgoingMessage,
+                    history: conversationHistory
+                )
 
                 withAnimation(.easeOut(duration: 0.25)) {
                     messages.append(ChatMessage(role: .assistant, text: reply))
@@ -235,7 +254,7 @@ struct ChatbotView: View {
             } catch {
                 withAnimation(.easeOut(duration: 0.25)) {
                     messages.append(
-                        ChatMessage(role: .assistant, text: chatbotErrorMessage(for: error))
+                        ChatMessage(role: .assistant, text: chatbotErrorMessage)
                     )
                 }
             }
@@ -244,14 +263,8 @@ struct ChatbotView: View {
         }
     }
 
-    private func chatbotErrorMessage(for error: Error) -> String {
-        if case ChatbotServiceError.missingURL = error {
-            return isArabic
-                ? "المساعد الذكي غير متصل حاليًا."
-                : "The chatbot is not connected yet."
-        }
-
-        return isArabic
+    private var chatbotErrorMessage: String {
+        isArabic
             ? "تعذر الحصول على رد. حاول مرة أخرى."
             : "Couldn’t get a response. Please try again."
     }
@@ -268,8 +281,4 @@ struct ChatbotView: View {
         appLanguage == "ar"
     }
 
-}
-
-#Preview("Chatbot Screen") {
-    ChatbotView()
 }
