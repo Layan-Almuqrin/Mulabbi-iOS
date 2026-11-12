@@ -1,3 +1,4 @@
+
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
@@ -17,6 +18,7 @@ struct PilgrimSignUpView: View {
     @State private var confirmPassword = ""
     @State private var email = ""
     @State private var phoneNumber = ""
+    @State private var selectedCountry = CountryPhoneCode.saudiArabia
     @State private var nationality = ""
 
     @State private var bloodType = "Choose your blood type"
@@ -32,6 +34,8 @@ struct PilgrimSignUpView: View {
 
     @State private var selectedLanguages: Set<String> = []
     @State private var showErrors = false
+    @State private var showAddLanguage = false
+    @State private var newLanguage = ""
     @State private var signupMessage: String?
     @State private var showEmailVerification = false
 
@@ -133,11 +137,17 @@ struct PilgrimSignUpView: View {
             : tr("Enter a valid email address", "أدخل بريداً إلكترونياً صحيحاً")
     }
 
+    private var fullPhoneNumber: String {
+        let digits = westernDigits(phoneNumber).filter { $0.isASCII && $0.isNumber }
+        let nationalNumber = digits.hasPrefix("0") ? String(digits.dropFirst()) : digits
+        return selectedCountry.dialCode + nationalNumber
+    }
+
     private var phoneError: String? {
-        let cleaned = westernDigits(phoneNumber).filter { !" -()".contains($0) }
-        return cleaned.range(of: "^\\+?[0-9]{8,15}$", options: .regularExpression) != nil
+        let digitCount = fullPhoneNumber.filter { $0.isASCII && $0.isNumber }.count
+        return (8...15).contains(digitCount)
             ? nil
-            : tr("Enter a valid phone number, e.g. +966501234567", "أدخل رقم جوال صحيحاً، مثال: 0501234567")
+            : tr("Enter a valid phone number", "أدخل رقم جوال صحيحاً")
     }
 
     private var nationalityError: String? {
@@ -195,7 +205,7 @@ struct PilgrimSignUpView: View {
         let usernameKey = usernameValue.lowercased()
         let firstNameValue = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         let lastNameValue = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let phoneValue = phoneNumber.trimmingCharacters(in: .whitespacesAndNewlines)
+        let phoneValue = fullPhoneNumber
         let nationalityValue = nationality.trimmingCharacters(in: .whitespacesAndNewlines)
         let ageValue = Int(westernDigits(age.trimmingCharacters(in: .whitespacesAndNewlines))) ?? 0
         let database = Firestore.firestore()
@@ -436,11 +446,7 @@ struct PilgrimSignUpView: View {
 
 
                         withError(phoneError) {
-                            inputField(
-                                title: "*Phone Number",
-                                placeholder: "Enter your phone number",
-                                text: $phoneNumber
-                            )
+                            phoneNumberField()
                         }
 
 
@@ -463,23 +469,64 @@ struct PilgrimSignUpView: View {
                                     .foregroundColor(.black)
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                                HStack(spacing: 6) {
-
-                                    languageButton("Arabic", value: "Arabic")
-                                    languageButton("English", value: "English")
-                                    languageButton("Urdu", value: "Urdu")
-
-                                    Button("+ Add") {
+                                LazyVGrid(
+                                    columns: [GridItem(.adaptive(minimum: 76), alignment: .leading)],
+                                    alignment: .leading,
+                                    spacing: 6
+                                ) {
+                                    ForEach(
+                                        ["Arabic", "English", "Urdu"] + selectedLanguages
+                                            .filter { !["Arabic", "English", "Urdu"].contains($0) }
+                                            .sorted(),
+                                        id: \.self
+                                    ) { language in
+                                        languageButton(language, value: language)
                                     }
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.black)
-                                    .padding(.horizontal, 10)
-                                    .frame(height: 46)
-                                    .background(Color.gray.opacity(0.15))
-                                    .cornerRadius(6)
+
+                                    Button {
+                                        newLanguage = ""
+                                        showAddLanguage = true
+                                    } label: {
+                                        Text("+ Add")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.black)
+                                            .padding(.horizontal, 10)
+                                            .frame(height: 46)
+                                            .background(Color.gray.opacity(0.15))
+                                            .cornerRadius(6)
+                                    }
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
+                        }
+                        .alert(
+                            tr("Add Language", "إضافة لغة"),
+                            isPresented: $showAddLanguage
+                        ) {
+                            TextField(tr("Language", "اللغة"), text: $newLanguage)
+
+                            Button(tr("Cancel", "إلغاء"), role: .cancel) {
+                                newLanguage = ""
+                            }
+
+                            Button(tr("Add", "إضافة")) {
+                                let language = newLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
+                                guard !language.isEmpty else { return }
+
+                                let alreadyAdded = selectedLanguages.contains {
+                                    $0.localizedCaseInsensitiveCompare(language) == .orderedSame
+                                }
+                                if !alreadyAdded {
+                                    selectedLanguages.insert(language)
+                                }
+                                newLanguage = ""
+                            }
+                            .disabled(newLanguage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        } message: {
+                            Text(tr(
+                                "Enter the language you want to add.",
+                                "اكتبي اللغة اللي تبين تضيفينها."
+                            ))
                         }
 
 
@@ -622,6 +669,58 @@ struct PilgrimSignUpView: View {
     }
 
 
+    private func phoneNumberField() -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("*Phone Number")
+                .font(.system(size: 18, weight: .bold))
+                .foregroundColor(.black)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach(CountryPhoneCode.all) { country in
+                        Button("\(country.name) (\(country.dialCode))") {
+                            selectedCountry = country
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(selectedCountry.isoCode)
+                            .font(.system(size: 14, weight: .semibold))
+                        Text(selectedCountry.dialCode)
+                            .font(.system(size: 14))
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                    .foregroundColor(.black)
+                    .padding(.horizontal, 10)
+                    .frame(height: 46)
+                    .background(Color.gray.opacity(0.15))
+                    .cornerRadius(6)
+                }
+
+                TextField(tr("Enter your phone number", "أدخل رقم جوالك"), text: $phoneNumber)
+                    .font(.system(size: 16))
+                    .keyboardType(.phonePad)
+                    .padding(.horizontal, 10)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 46)
+                    .background(Color.gray.opacity(0.15))
+                    .cornerRadius(6)
+                    .onChange(of: phoneNumber) { _, newValue in
+                        let digits = String(
+                            westernDigits(newValue)
+                                .filter { $0.isASCII && $0.isNumber }
+                                .prefix(14)
+                        )
+                        if digits != newValue {
+                            phoneNumber = digits
+                        }
+                    }
+            }
+        }
+        .frame(maxWidth: .infinity)
+    }
 
     private func inputField(
         title: LocalizedStringKey,
@@ -782,16 +881,18 @@ struct PilgrimSignUpView: View {
 
 
     private func languageButton(
-        _ language: LocalizedStringKey,
+        _ language: String,
         value: String
     ) -> some View {
 
-        Button(language) {
+        Button {
             if selectedLanguages.contains(value) {
                 selectedLanguages.remove(value)
             } else {
                 selectedLanguages.insert(value)
             }
+        } label: {
+            Text(language)
         }
         .font(.system(size: 12))
         .foregroundColor(.black)
@@ -809,6 +910,49 @@ struct PilgrimSignUpView: View {
     }
 }
 
+
+
+private struct CountryPhoneCode: Identifiable {
+    let isoCode: String
+    let name: String
+    let dialCode: String
+
+    var id: String { isoCode }
+
+    static let saudiArabia = CountryPhoneCode(isoCode: "SA", name: "Saudi Arabia", dialCode: "+966")
+
+    static let all: [CountryPhoneCode] = [
+        saudiArabia,
+        CountryPhoneCode(isoCode: "AE", name: "United Arab Emirates", dialCode: "+971"),
+        CountryPhoneCode(isoCode: "BH", name: "Bahrain", dialCode: "+973"),
+        CountryPhoneCode(isoCode: "KW", name: "Kuwait", dialCode: "+965"),
+        CountryPhoneCode(isoCode: "OM", name: "Oman", dialCode: "+968"),
+        CountryPhoneCode(isoCode: "QA", name: "Qatar", dialCode: "+974"),
+        CountryPhoneCode(isoCode: "YE", name: "Yemen", dialCode: "+967"),
+        CountryPhoneCode(isoCode: "EG", name: "Egypt", dialCode: "+20"),
+        CountryPhoneCode(isoCode: "JO", name: "Jordan", dialCode: "+962"),
+        CountryPhoneCode(isoCode: "PS", name: "Palestine", dialCode: "+970"),
+        CountryPhoneCode(isoCode: "IQ", name: "Iraq", dialCode: "+964"),
+        CountryPhoneCode(isoCode: "SY", name: "Syria", dialCode: "+963"),
+        CountryPhoneCode(isoCode: "LB", name: "Lebanon", dialCode: "+961"),
+        CountryPhoneCode(isoCode: "TR", name: "Türkiye", dialCode: "+90"),
+        CountryPhoneCode(isoCode: "PK", name: "Pakistan", dialCode: "+92"),
+        CountryPhoneCode(isoCode: "IN", name: "India", dialCode: "+91"),
+        CountryPhoneCode(isoCode: "BD", name: "Bangladesh", dialCode: "+880"),
+        CountryPhoneCode(isoCode: "ID", name: "Indonesia", dialCode: "+62"),
+        CountryPhoneCode(isoCode: "MY", name: "Malaysia", dialCode: "+60"),
+        CountryPhoneCode(isoCode: "AF", name: "Afghanistan", dialCode: "+93"),
+        CountryPhoneCode(isoCode: "FR", name: "France", dialCode: "+33"),
+        CountryPhoneCode(isoCode: "GB", name: "United Kingdom", dialCode: "+44"),
+        CountryPhoneCode(isoCode: "US", name: "United States", dialCode: "+1"),
+        CountryPhoneCode(isoCode: "CA", name: "Canada", dialCode: "+1"),
+        CountryPhoneCode(isoCode: "DE", name: "Germany", dialCode: "+49"),
+        CountryPhoneCode(isoCode: "MA", name: "Morocco", dialCode: "+212"),
+        CountryPhoneCode(isoCode: "TN", name: "Tunisia", dialCode: "+216"),
+        CountryPhoneCode(isoCode: "SD", name: "Sudan", dialCode: "+249"),
+        CountryPhoneCode(isoCode: "NG", name: "Nigeria", dialCode: "+234")
+    ]
+}
 
 
 struct PilgrimEmailVerificationView: View {
