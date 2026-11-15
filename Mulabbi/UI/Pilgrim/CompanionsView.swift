@@ -199,7 +199,10 @@ private struct SearchCompanionsView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 28))
                 .shadow(color: .black.opacity(0.2), radius: 16)
                 .padding(.horizontal, 28)
-                .environment(\.layoutDirection, .leftToRight)
+                .environment(
+                    \.layoutDirection,
+                    appLanguage == "ar" ? .rightToLeft : .leftToRight
+                )
             }
         }
         .toolbar(.hidden, for: .navigationBar)
@@ -288,7 +291,9 @@ private struct SearchCompanionsView: View {
                 case .success:
                     isRequestSent = true
                 case .failure(let error):
-                    requestMessage = error.localizedDescription
+                    requestMessage = error is CompanionRequestError && appLanguage == "ar"
+                        ? "هذا المرافق مضاف بالفعل أو لديه طلب إضافة قيد الانتظار."
+                        : error.localizedDescription
                     isShowingRequestMessage = true
                 }
             }
