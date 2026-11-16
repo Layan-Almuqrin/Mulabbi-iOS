@@ -1,4 +1,5 @@
 import Foundation
+import FirebaseAuth
 import FirebaseFirestore
 
 enum CompanionRequestError: LocalizedError {
@@ -7,6 +8,12 @@ enum CompanionRequestError: LocalizedError {
     var errorDescription: String? {
         "This companion is already added or has a pending request."
     }
+}
+
+enum CompanionConnectionStatus: Equatable {
+    case available
+    case pending
+    case accepted
 }
 
 /// مسؤول عن حفظ وإدارة بيانات المرافقين في فايربيس.
@@ -110,26 +117,15 @@ final class CompanionFirebase {
                     "isAlertEnabled": true
                 ]
 
-                self.database.collection("companion_connections")
-                    .whereField("pilgrimUsername", isEqualTo: pilgrim.username)
-                    .getDocuments { snapshot, error in
-                        if let error {
-                            completion(.failure(error))
-                            return
-                        }
+                self.connectionStatus(
+                    between: pilgrim.username,
+                    and: companion.username
+                ) { statusResult in
+                    switch statusResult {
+                    case .failure(let error):
+                        completion(.failure(error))
 
-                        let alreadyExists = snapshot?.documents.contains { document in
-                            let username = document["companionUsername"] as? String
-                            let status = document["status"] as? String
-                            return username == companion.username
-                                && ["pending", "accepted"].contains(status)
-                        } ?? false
-
-                        guard !alreadyExists else {
-                            completion(.failure(CompanionRequestError.alreadyExists))
-                            return
-                        }
-
+                    case .success(.available):
                         self.database.collection("companion_connections")
                             .addDocument(data: requestData) { error in
                                 if let error {
@@ -138,10 +134,52 @@ final class CompanionFirebase {
                                     completion(.success(()))
                                 }
                             }
+
+                    case .success:
+                        completion(.failure(CompanionRequestError.alreadyExists))
                     }
+                }
 
             case .failure(let error):
                 completion(.failure(error))
+            }
+        }
+    }
+
+    func connectionStatus(
+        between firstUsername: String,
+        and secondUsername: String,
+        completion: @escaping (Result<CompanionConnectionStatus, Error>) -> Void
+    ) {
+        let first = firstUsername.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let second = secondUsername.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        database.collection("companion_connections").getDocuments { snapshot, error in
+            if let error {
+                completion(.failure(error))
+                return
+            }
+
+            let statuses = snapshot?.documents.compactMap { document -> String? in
+                guard
+                    let pilgrimUsername = document["pilgrimUsername"] as? String,
+                    let companionUsername = document["companionUsername"] as? String,
+                    let status = document["status"] as? String
+                else {
+                    return nil
+                }
+
+                let isSamePair = (pilgrimUsername.lowercased() == first && companionUsername.lowercased() == second)
+                    || (pilgrimUsername.lowercased() == second && companionUsername.lowercased() == first)
+                return isSamePair ? status : nil
+            } ?? []
+
+            if statuses.contains("accepted") {
+                completion(.success(.accepted))
+            } else if statuses.contains("pending") {
+                completion(.success(.pending))
+            } else {
+                completion(.success(.available))
             }
         }
     }
@@ -213,25 +251,48 @@ final class CompanionFirebase {
         for username: String,
         completion: @escaping (Result<[Companion], Error>) -> Void
     ) {
-        database.collection("companion_connections")
-            .whereField("pilgrimUsername", isEqualTo: username)
-            .getDocuments { snapshot, error in
-                if let error {
-                    completion(.failure(error))
-                    return
+        let fallbackUsername = username
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard let userID = Auth.auth().currentUser?.uid else {
+            loadAcceptedCompanions(for: fallbackUsername, completion: completion)
+            return
+        }
+
+        database.collection("users").document(userID).getDocument { document, _ in
+            let savedUsername = document?.data()?["username"] as? String
+            self.loadAcceptedCompanions(
+                for: savedUsername ?? fallbackUsername,
+                completion: completion
+            )
+        }
+    }
+
+    private func loadAcceptedCompanions(
+        for username: String,
+        completion: @escaping (Result<[Companion], Error>) -> Void
+    ) {
+        let normalizedUsername = username.lowercased()
+
+        database.collection("companion_connections").getDocuments { snapshot, error in
+            if let error {
+                completion(.failure(error))
+                return
+            }
+
+            let companions = snapshot?.documents.compactMap { document -> Companion? in
+                guard
+                    let status = document["status"] as? String,
+                    status == "accepted",
+                    let pilgrimUsername = document["pilgrimUsername"] as? String,
+                    let companionUsername = document["companionUsername"] as? String
+                else {
+                    return nil
                 }
 
-                let companions = snapshot?.documents.compactMap { document -> Companion? in
-                    guard
-                        let status = document["status"] as? String,
-                        status == "accepted",
-                        let companionName = document["companionName"] as? String,
-                        let companionUsername = document["companionUsername"] as? String,
-                        let companionPhoneNumber = document["companionPhoneNumber"] as? String
-                    else {
-                        return nil
-                    }
-
+                if pilgrimUsername.lowercased() == normalizedUsername,
+                   let companionName = document["companionName"] as? String,
+                   let companionPhoneNumber = document["companionPhoneNumber"] as? String {
                     return Companion(
                         name: companionName,
                         username: companionUsername,
@@ -239,10 +300,25 @@ final class CompanionFirebase {
                         isAlertEnabled: document["isAlertEnabled"] as? Bool ?? true,
                         connectionId: document.documentID
                     )
-                } ?? []
+                }
 
-                completion(.success(self.removeDuplicateCompanions(companions)))
-            }
+                if companionUsername.lowercased() == normalizedUsername,
+                   let pilgrimName = document["pilgrimName"] as? String,
+                   let pilgrimPhoneNumber = document["pilgrimPhoneNumber"] as? String {
+                    return Companion(
+                        name: pilgrimName,
+                        username: pilgrimUsername,
+                        phoneNumber: pilgrimPhoneNumber,
+                        isAlertEnabled: document["isAlertEnabled"] as? Bool ?? true,
+                        connectionId: document.documentID
+                    )
+                }
+
+                return nil
+            } ?? []
+
+            completion(.success(self.removeDuplicateCompanions(companions)))
+        }
     }
     
     /// يجلب المرافقين المقبولين الذين تنبيهاتهم مفعله لارسال تنبيه الطوارئ لهم
