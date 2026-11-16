@@ -63,7 +63,11 @@ struct CompanionsView: View {
             }
             .toolbar(.hidden, for: .navigationBar)
         }
-        .onAppear {
+        .task(id: currentUsername) {
+            guard !currentUsername.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                return
+            }
+
             store.loadAcceptedCompanions(for: currentUsername)
             store.loadIncomingRequests(for: currentUsername)
         }
@@ -141,9 +145,27 @@ private struct SearchCompanionsView: View {
     @State private var countryCode = "+966"
     @State private var isShowingCountryPicker = false
     @State private var result: SearchResult = .none
-    @State private var isRequestSent = false
-    @State private var requestMessage = ""
-    @State private var isShowingRequestMessage = false
+    @State private var connectionStatus: CompanionConnectionStatus = .available
+    @State private var isCheckingConnection = false
+
+    private func tr(_ english: String, _ arabic: String) -> String {
+        appLanguage == "ar" ? arabic : english
+    }
+
+    private var actionTitle: String {
+        if isCheckingConnection {
+            return tr("Checking...", "جارٍ التحقق...")
+        }
+
+        switch connectionStatus {
+        case .available:
+            return tr("Send", "إرسال")
+        case .pending:
+            return tr("Request Sent", "تم إرسال الطلب")
+        case .accepted:
+            return tr("Added", "مضاف")
+        }
+    }
 
     var body: some View {
         ZStack {
@@ -170,40 +192,6 @@ private struct SearchCompanionsView: View {
             }
             .padding(.horizontal, 22)
 
-            if isShowingRequestMessage {
-                Color.black.opacity(0.2)
-                    .ignoresSafeArea()
-
-                VStack(alignment: .leading, spacing: 18) {
-                    Text("Companions")
-                        .font(.title3.weight(.bold))
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Text(requestMessage)
-                        .font(.body)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Button("OK") {
-                        isShowingRequestMessage = false
-                    }
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.mulabbiMaroon)
-                    .clipShape(Capsule())
-                }
-                .padding(24)
-                .background(.white)
-                .clipShape(RoundedRectangle(cornerRadius: 28))
-                .shadow(color: .black.opacity(0.2), radius: 16)
-                .padding(.horizontal, 28)
-                .environment(
-                    \.layoutDirection,
-                    appLanguage == "ar" ? .rightToLeft : .leftToRight
-                )
-            }
         }
         .toolbar(.hidden, for: .navigationBar)
         .sheet(isPresented: $isShowingCountryPicker) {
@@ -229,7 +217,8 @@ private struct SearchCompanionsView: View {
                 /// يعرض المستخدم الذي عثر عليه ويرسل طلب اضافته كمرافق عند الضغط على زر الإضافة
                 SearchResultCard(
                     companion: foundCompanion,
-                    isRequestSent: $isRequestSent,
+                    actionTitle: actionTitle,
+                    isActionDisabled: isCheckingConnection || connectionStatus != .available,
                     onAdd: {
                         sendCompanionRequest(for: foundCompanion)
                     }
@@ -257,10 +246,13 @@ private struct SearchCompanionsView: View {
         guard !enteredPhoneNumber.isEmpty else {
             foundCompanion = nil
             result = .none
+            connectionStatus = .available
+            isCheckingConnection = false
             return
         }
 
-        isRequestSent = false
+        connectionStatus = .available
+        isCheckingConnection = false
 
         companionFirebase.findPilgrim(by: fullPhoneNumber) { searchResult in
             DispatchQueue.main.async {
@@ -268,6 +260,20 @@ private struct SearchCompanionsView: View {
                 case .success(let companion):
                     foundCompanion = companion
                     result = companion == nil ? .notFound : .found
+
+                    guard let companion else { return }
+                    isCheckingConnection = true
+                    companionFirebase.connectionStatus(
+                        between: currentUsername,
+                        and: companion.username
+                    ) { statusResult in
+                        DispatchQueue.main.async {
+                            isCheckingConnection = false
+                            if case .success(let status) = statusResult {
+                                connectionStatus = status
+                            }
+                        }
+                    }
 
                 case .failure:
                     foundCompanion = nil
@@ -278,9 +284,14 @@ private struct SearchCompanionsView: View {
     }
     /// يرسل طلب إضافة المرافق الذي اختاره المستخدم.
     private func sendCompanionRequest(for companion: Companion) {
-        guard !currentUsername.isEmpty else {
+        guard !currentUsername.isEmpty,
+              connectionStatus == .available,
+              !isCheckingConnection
+        else {
             return
         }
+
+        isCheckingConnection = true
 
         companionFirebase.sendCompanionRequest(
             pilgrimUsername: currentUsername,
@@ -289,12 +300,24 @@ private struct SearchCompanionsView: View {
             DispatchQueue.main.async {
                 switch requestResult {
                 case .success:
-                    isRequestSent = true
+                    connectionStatus = .pending
+                    isCheckingConnection = false
                 case .failure(let error):
-                    requestMessage = error is CompanionRequestError && appLanguage == "ar"
-                        ? "هذا المرافق مضاف بالفعل أو لديه طلب إضافة قيد الانتظار."
-                        : error.localizedDescription
-                    isShowingRequestMessage = true
+                    if error is CompanionRequestError {
+                        companionFirebase.connectionStatus(
+                            between: currentUsername,
+                            and: companion.username
+                        ) { statusResult in
+                            DispatchQueue.main.async {
+                                isCheckingConnection = false
+                                if case .success(let status) = statusResult {
+                                    connectionStatus = status
+                                }
+                            }
+                        }
+                    } else {
+                        isCheckingConnection = false
+                    }
                 }
             }
         }
@@ -443,20 +466,24 @@ private struct EmptyState: View {
 
 private struct SearchResultCard: View {
     let companion: Companion
-    @Binding var isRequestSent: Bool
+    let actionTitle: String
+    let isActionDisabled: Bool
     let onAdd: () -> Void
+
     var body: some View {
         HStack(spacing: 12) {
             PersonDetails(person: companion)
             Spacer(minLength: 4)
-            Button(isRequestSent ? "Sent" : "Add") {
+            Button(actionTitle) {
                 onAdd()
             }
             .font(.caption.weight(.bold))
-                .foregroundStyle(Color.mulabbiMaroon)
-                .frame(width: 58, height: 38)
-                .background(.white)
-                .clipShape(Capsule())
+            .foregroundStyle(Color.mulabbiMaroon)
+            .frame(width: 108, height: 38)
+            .background(.white)
+            .clipShape(Capsule())
+            .disabled(isActionDisabled)
+            .opacity(isActionDisabled ? 0.72 : 1)
         }
         .padding(12)
         .background(cardGradient)

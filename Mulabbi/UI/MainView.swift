@@ -1,4 +1,5 @@
 import SwiftUI
+import FirebaseAuth
 
 private enum AppScreen {
     case welcome
@@ -12,6 +13,7 @@ private enum AppScreen {
 struct MainView: View {
     
     @AppStorage("appLanguage") private var appLanguage = "en"
+    @AppStorage("currentUsername") private var currentUsername = ""
     
     @State private var screen: AppScreen = .welcome
     
@@ -71,9 +73,12 @@ struct MainView: View {
                 
                 PilgrimMainView(
                     onLogout: {
+                        try? Auth.auth().signOut()
+                        currentUsername = ""
                         screen = .roleSelection
                     }
                 )
+                .id(currentUsername)
                 
                 
             case .paramedicApp:

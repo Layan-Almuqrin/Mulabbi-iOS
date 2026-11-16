@@ -81,9 +81,15 @@ struct PilgrimLoginView: View {
                     throw LoginError.emailNotVerified
                 }
 
+                let profileSnapshot = try await Firestore.firestore()
+                    .collection("users")
+                    .document(result.user.uid)
+                    .getDocument()
+                let savedUsername = profileSnapshot.data()?["username"] as? String
+                    ?? username.trimmingCharacters(in: .whitespacesAndNewlines)
+
                 await MainActor.run {
-                    currentUsername = username
-                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    currentUsername = savedUsername
                     isLoading = false
                     onLogin()
                 }

@@ -662,6 +662,8 @@ private struct RequestForOthersDetailsView: View {
     @AppStorage("appLanguage") private var appLanguage = "en"
     @FocusState private var isEditingDetails: Bool
 
+    private var isArabic: Bool { appLanguage == "ar" }
+
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 18) {
@@ -672,13 +674,17 @@ private struct RequestForOthersDetailsView: View {
                 Text("Describe the Situation")
                     .font(.headline)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .environment(\.layoutDirection, .leftToRight)
+                    .multilineTextAlignment(.leading)
+                    .environment(
+                        \.layoutDirection,
+                        isArabic ? .rightToLeft : .leftToRight
+                    )
 
                 ZStack(alignment: .topLeading) {
                     TextEditor(text: $details)
                         .font(.body)
                         .multilineTextAlignment(.leading)
-                        .environment(\.layoutDirection, .leftToRight)
+                        .environment(\.layoutDirection, isArabic ? .rightToLeft : .leftToRight)
                         .focused($isEditingDetails)
                         .scrollContentBackground(.hidden)
                         .padding(8)
@@ -688,12 +694,12 @@ private struct RequestForOthersDetailsView: View {
                     if details.isEmpty {
                         Text("Describe what happened in detail...")
                             .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(.top, 18)
-                            .padding(.leading, 16)
+                            .padding(.horizontal, 16)
                             .allowsHitTesting(false)
                     }
                 }
-                .environment(\.layoutDirection, .leftToRight)
                 .frame(maxHeight: .infinity)
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
