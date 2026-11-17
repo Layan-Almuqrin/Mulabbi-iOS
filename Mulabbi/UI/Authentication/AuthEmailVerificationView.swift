@@ -49,13 +49,15 @@ struct AuthEmailVerificationView: View {
                         .font(.system(size: 42))
                         .foregroundColor(Color.mulabbiMaroon)
 
-                    Text(didVerify ? tr("Email verified", "تم تأكيد البريد") : tr("Verify your email", "أكّدي بريدك الإلكتروني"))
+                    Text(didVerify
+                         ? tr("Email verified", "تم تأكيد البريد الإلكتروني")
+                         : tr("Verify your email", "تأكيد البريد الإلكتروني"))
                         .font(.system(size: 22, weight: .bold))
                         .foregroundColor(Color.mulabbiMaroon)
 
                     Text(didVerify
-                         ? tr("Your email is verified. You can continue.", "تم تأكيد بريدك. يمكنك المتابعة.")
-                         : tr("We sent a verification link to:", "أرسلنا رابط التحقق إلى:"))
+                         ? tr("Your email is verified. You can continue.", "تم تأكيد البريد الإلكتروني. يمكنك المتابعة.")
+                         : tr("We sent a verification link to:", "أُرسل رابط التحقق إلى:"))
                         .font(.system(size: 13))
                         .foregroundColor(.black)
                         .multilineTextAlignment(.center)
@@ -67,15 +69,25 @@ struct AuthEmailVerificationView: View {
                             .multilineTextAlignment(.center)
                             .textSelection(.enabled)
 
-                        Text(tr("Open the email and tap the link, then return here.", "افتحي الرسالة واضغطي الرابط، ثم ارجعي إلى التطبيق."))
-                            .font(.system(size: 12))
-                            .foregroundColor(.gray)
-                            .multilineTextAlignment(.center)
+                        Text(tr(
+                            "Open the email and tap the link, then return here.",
+                            "يرجى فتح رسالة البريد الإلكتروني واتباع رابط التحقق، ثم العودة إلى التطبيق."
+                        ))
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
 
                         Button(action: checkVerification) {
                             Group {
-                                if isChecking { ProgressView().tint(.white) }
-                                else { Text(tr("I verified my email", "تحققت من بريدي")).font(.system(size: 16, weight: .semibold)) }
+                                if isChecking {
+                                    ProgressView().tint(.white)
+                                } else {
+                                    Text(tr(
+                                        "I verified my email",
+                                        "تم التحقق من البريد الإلكتروني"
+                                    ))
+                                    .font(.system(size: 16, weight: .semibold))
+                                }
                             }
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -86,7 +98,9 @@ struct AuthEmailVerificationView: View {
                         .disabled(isChecking || isResending)
 
                         Button(action: resendLink) {
-                            Text(isResending ? tr("Sending…", "جارٍ الإرسال…") : tr("Resend verification link", "إعادة إرسال رابط التحقق"))
+                            Text(isResending
+                                 ? tr("Sending…", "جارٍ الإرسال…")
+                                 : tr("Resend verification link", "إعادة إرسال رابط التحقق"))
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(Color.mulabbiMaroon)
                         }
@@ -123,36 +137,51 @@ struct AuthEmailVerificationView: View {
         .navigationBarBackButtonHidden(true)
     }
 
-    // هنا نتأكد من حالة البريد بعد ما يرجع المستخدم من رابط التحقق.
+    // التحقق من حالة البريد الإلكتروني بعد العودة من رابط التحقق.
     private func checkVerification() {
         guard let user = Auth.auth().currentUser else {
-            message = tr("Please sign in again after verifying your email.", "بعد تأكيد البريد، سجّلي الدخول مجددًا.")
+            message = tr(
+                "Please sign in again after verifying your email.",
+                "يرجى تسجيل الدخول مجددًا بعد تأكيد البريد الإلكتروني."
+            )
             return
         }
+
         isChecking = true
         user.reload { error in
             isChecking = false
+
             if let error {
                 message = error.localizedDescription
             } else if Auth.auth().currentUser?.isEmailVerified == true {
                 didVerify = true
                 message = nil
             } else {
-                message = tr("Email is not verified yet. Open the link in your email first.", "لم يتم تأكيد البريد بعد. افتحي الرابط في رسالتك أولًا.")
+                message = tr(
+                    "Email is not verified yet. Open the link in your email first.",
+                    "لم يتم تأكيد البريد الإلكتروني بعد. يرجى فتح رابط التحقق في الرسالة أولًا."
+                )
             }
         }
     }
 
     private func resendLink() {
         guard let user = Auth.auth().currentUser else {
-            message = tr("Please sign in again to resend the link.", "سجّلي الدخول مجددًا لإعادة إرسال الرابط.")
+            message = tr(
+                "Please sign in again to resend the link.",
+                "يرجى تسجيل الدخول مجددًا لإعادة إرسال الرابط."
+            )
             return
         }
+
         isResending = true
         user.sendEmailVerification { error in
             isResending = false
             message = error.map { $0.localizedDescription }
-                ?? tr("A new verification link was sent.", "أرسلنا رابط تحقق جديدًا.")
+                ?? tr(
+                    "A new verification link was sent.",
+                    "أُرسل رابط تحقق جديد."
+                )
         }
     }
 }
