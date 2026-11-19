@@ -38,6 +38,7 @@ final class PilgrimSettingsStore: ObservableObject {
     private let database = Firestore.firestore()
     private var savedUsername = ""
 
+    /// يجلب بيانات الحاج وسجله الطبي من فايرستور
     func fetch() async {
         guard !isLoading else { return }
 
@@ -48,6 +49,7 @@ final class PilgrimSettingsStore: ObservableObject {
         do {
             let data = try await currentUserData(expectedRole: "pilgrim")
             profile = PilgrimProfileSettings(data: data)
+            profile.email = Auth.auth().currentUser?.email ?? profile.email
             medicalRecord = PilgrimMedicalSettings(
                 data: data["medicalRecord"] as? [String: Any] ?? [:]
             )
@@ -57,6 +59,7 @@ final class PilgrimSettingsStore: ObservableObject {
         }
     }
 
+    /// يجلب عمر الحاج لاستخدامه في متابعة نبض القلب
     func fetchAge() async throws -> Int {
         let data = try await currentUserData(expectedRole: "pilgrim")
         guard let age = (data["age"] as? NSNumber)?.intValue,
@@ -67,6 +70,7 @@ final class PilgrimSettingsStore: ObservableObject {
         return age
     }
 
+    /// يحفظ تعديلات بروفايل الحاج في فايرستور
     func saveProfile(newPassword: String = "") async -> Bool {
         guard !isSaving else { return false }
 
@@ -79,22 +83,31 @@ final class PilgrimSettingsStore: ObservableObject {
                 throw PilgrimSettingsError.notSignedIn
             }
 
+            /// يتأكد أن الإيميل الجديد تم التحقق منه قبل الحفظ
+            try await user.reload()
+            guard let verifiedUser = Auth.auth().currentUser,
+                  verifiedUser.email?.normalizedEmail == profile.email.normalizedEmail
+            else {
+                throw PilgrimSettingsError.emailNotVerified
+            }
+
             if !newPassword.isEmpty {
-                try await user.updatePassword(to: newPassword)
+                try await verifiedUser.updatePassword(to: newPassword)
             }
 
             let oldUsernameKey = savedUsername.usernameKey
             let newUsernameKey = profile.username.usernameKey
-            let userDocument = database.collection("users").document(user.uid)
+            let userDocument = database.collection("users").document(verifiedUser.uid)
             var profileData = profile.firestoreData
             profileData["updatedAt"] = FieldValue.serverTimestamp()
 
+            /// يحدث بيانات اسم المستخدم أو ينشئ اسم جديد إذا تغير
             if oldUsernameKey == newUsernameKey {
                 let batch = database.batch()
                 batch.setData(profileData, forDocument: userDocument, merge: true)
                 batch.setData([
-                    "email": user.email ?? profile.email,
-                    "uid": user.uid,
+                    "email": verifiedUser.email ?? profile.email,
+                    "uid": verifiedUser.uid,
                     "role": "pilgrim"
                 ], forDocument: database.collection("usernames").document(newUsernameKey), merge: true)
                 try await batch.commit()
@@ -103,8 +116,8 @@ final class PilgrimSettingsStore: ObservableObject {
                     from: oldUsernameKey,
                     to: newUsernameKey,
                     role: "pilgrim",
-                    loginEmail: user.email ?? profile.email,
-                    userID: user.uid,
+                    loginEmail: verifiedUser.email ?? profile.email,
+                    userID: verifiedUser.uid,
                     userData: profileData
                 )
             }
@@ -117,6 +130,7 @@ final class PilgrimSettingsStore: ObservableObject {
         }
     }
 
+    /// يحفظ تعديلات السجل الطبي للحاج
     func saveMedicalRecord() async -> Bool {
         guard !isSaving else { return false }
 
@@ -188,6 +202,7 @@ private enum PilgrimSettingsError: LocalizedError {
     case invalidAge
     case invalidUsername
     case usernameTaken
+    case emailNotVerified
 
     var errorDescription: String? {
         switch self {
@@ -196,6 +211,7 @@ private enum PilgrimSettingsError: LocalizedError {
         case .invalidAge: "A valid age was not found in the pilgrim profile."
         case .invalidUsername: "Username cannot be empty."
         case .usernameTaken: "Username is already taken."
+        case .emailNotVerified: "Verify the new email before saving."
         }
     }
 }
