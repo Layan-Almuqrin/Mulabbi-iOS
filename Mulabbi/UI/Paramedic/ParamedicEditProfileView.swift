@@ -1,5 +1,4 @@
 import SwiftUI
-import UniformTypeIdentifiers
 
 struct ParamedicProfileData {
     var username: String
@@ -34,9 +33,9 @@ struct ParamedicEditProfileView: View {
     @State private var confirmPassword: String
     @State private var invalidFields: Set<ParamedicProfileField> = []
     @State private var validationMessage: String?
-    @State private var isImportingCertificate = false
     @State private var verifiedEmail: String
     @State private var isShowingEmailVerification = false
+    @AppStorage("appLanguage") private var appLanguage = "en"
 
     init(
         profile: ParamedicProfileData,
@@ -80,13 +79,14 @@ struct ParamedicEditProfileView: View {
                                 text: $draft.age,
                                 fieldHeight: 46,
                                 isInvalid: invalidFields.contains(.age),
-                                keyboardType: .numberPad,
-                                allowsOnlyDigits: true,
-                                maximumLength: 3
+                                keyboardType: .numberPad
                             )
                             .id(ParamedicProfileField.age)
                         }
-                        .environment(\.layoutDirection, .leftToRight)
+                        .environment(
+                            \.layoutDirection,
+                            appLanguage == "ar" ? .rightToLeft : .leftToRight
+                        )
 
                         HStack(alignment: .top, spacing: 10) {
                             SettingsTextField(
@@ -105,7 +105,10 @@ struct ParamedicEditProfileView: View {
                             )
                             .id(ParamedicProfileField.lastName)
                         }
-                        .environment(\.layoutDirection, .leftToRight)
+                        .environment(
+                            \.layoutDirection,
+                            appLanguage == "ar" ? .rightToLeft : .leftToRight
+                        )
 
                         SettingsTextField(
                             title: "Password",
@@ -136,7 +139,6 @@ struct ParamedicEditProfileView: View {
                         .id(ParamedicProfileField.email)
 
                         certificateField
-                            .id(ParamedicProfileField.certificate)
 
                         SettingsSaveButton {
                             validateAndSave(using: proxy)
@@ -152,16 +154,6 @@ struct ParamedicEditProfileView: View {
         .background(Color(.systemBackground))
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .tabBar)
-        .fileImporter(
-            isPresented: $isImportingCertificate,
-            allowedContentTypes: [.pdf, .image],
-            allowsMultipleSelection: false
-        ) { result in
-            if case .success(let urls) = result, let url = urls.first {
-                draft.certificateFileName = url.lastPathComponent
-                invalidFields.remove(.certificate)
-            }
-        }
         .overlay {
             if isShowingEmailVerification {
                 EmailVerificationView(
@@ -170,7 +162,6 @@ struct ParamedicEditProfileView: View {
                     onVerified: {
                         verifiedEmail = draft.email.normalizedEmail
                         isShowingEmailVerification = false
-                        onSave(draft)
                     }
                 )
                 .transition(.opacity)
@@ -179,50 +170,40 @@ struct ParamedicEditProfileView: View {
         .animation(.easeInOut(duration: 0.2), value: isShowingEmailVerification)
     }
 
+    /// يعرض شهادة المسعف بدون السماح بتعديلها
     private var certificateField: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Certificate")
                 .font(.system(size: 18, weight: .bold))
 
-            Button {
-                isImportingCertificate = true
-            } label: {
-                VStack(spacing: 7) {
-                    Image(systemName: "paperclip")
-                        .font(.system(size: 31, weight: .semibold))
+            VStack(spacing: 7) {
+                Image(systemName: "paperclip")
+                    .font(.system(size: 31, weight: .semibold))
 
-                    Text("Attach Certificate")
-                        .font(.system(size: 16, weight: .bold))
+                Text("Attach Certificate")
+                    .font(.system(size: 16, weight: .bold))
 
-                    if !draft.certificateFileName.isBlank {
-                        Text(draft.certificateFileName)
-                            .font(.system(size: 12))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-                .foregroundStyle(AppColors.brandRed)
-                .frame(maxWidth: .infinity)
-                .frame(height: 128)
-                .background(
-                    invalidFields.contains(.certificate)
-                        ? AppColors.brandRed.opacity(0.16)
-                        : Color(red: 0.86, green: 0.86, blue: 0.87),
-                    in: RoundedRectangle(cornerRadius: 6)
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(
-                            invalidFields.contains(.certificate)
-                                ? AppColors.brandRed
-                                : Color.black.opacity(0.75),
-                            style: StrokeStyle(lineWidth: 1.4, dash: [5, 4])
-                        )
+                if !draft.certificateFileName.isBlank {
+                    Text(draft.certificateFileName)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
             }
-            .buttonStyle(.plain)
-            .allowsHitTesting(false)
-
+            .foregroundStyle(AppColors.brandRed)
+            .frame(maxWidth: .infinity)
+            .frame(height: 128)
+            .background(
+                Color(red: 0.86, green: 0.86, blue: 0.87),
+                in: RoundedRectangle(cornerRadius: 6)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(
+                        Color.black.opacity(0.75),
+                        style: StrokeStyle(lineWidth: 1.4, dash: [5, 4])
+                    )
+            }
         }
     }
 
@@ -236,8 +217,11 @@ struct ParamedicEditProfileView: View {
         return "Passwords do not match"
     }
 
+    /// يتأكد من صحة بيانات المسعف قبل الانتقال إلى الحفظ
     private func validateAndSave(using proxy: ScrollViewProxy) {
         var invalid: Set<ParamedicProfileField> = []
+
+        draft.age = draft.age.withWesternDigits
 
         if !draft.username.isValidSignupUsername { invalid.insert(.username) }
         if draft.age.isBlank {
@@ -262,10 +246,6 @@ struct ParamedicEditProfileView: View {
         } else if !draft.email.isValidEmail {
             invalid.insert(.email)
         }
-        if draft.certificateFileName.isBlank {
-            invalid.insert(.certificate)
-        }
-
         invalidFields = invalid
         validationMessage = invalid.isEmpty
             ? nil
@@ -281,8 +261,7 @@ struct ParamedicEditProfileView: View {
                 .lastName,
                 .password,
                 .confirmPassword,
-                .email,
-                .certificate
+                .email
             ]
 
             if let firstInvalid = order.first(where: invalid.contains) {
@@ -295,6 +274,7 @@ struct ParamedicEditProfileView: View {
             return
         }
 
+        /// يفتح تحقق الإيميل فقط إذا تم تغيير البريد
         if draft.email.normalizedEmail != verifiedEmail {
             isShowingEmailVerification = true
         } else {
@@ -308,7 +288,6 @@ struct ParamedicEditProfileView: View {
             || draft.firstName.isBlank
             || draft.lastName.isBlank
             || draft.email.isBlank
-            || draft.certificateFileName.isBlank
     }
 }
 
@@ -320,7 +299,6 @@ private enum ParamedicProfileField: Hashable {
     case password
     case confirmPassword
     case email
-    case certificate
 }
 
 #Preview {

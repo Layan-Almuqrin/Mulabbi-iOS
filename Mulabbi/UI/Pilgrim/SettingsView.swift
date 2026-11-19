@@ -115,8 +115,6 @@ struct SettingsTextField: View {
     var isInvalid = false
     var errorMessage: String? = nil
     var keyboardType: UIKeyboardType = .default
-    var allowsOnlyDigits = false
-    var maximumLength: Int? = nil
 
     @State private var isPasswordVisible = false
     @AppStorage("appLanguage") private var appLanguage = "en"
@@ -147,12 +145,6 @@ struct SettingsTextField: View {
                 .keyboardType(keyboardType)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-                .onChange(of: text) { _, newValue in
-                    let filtered = allowsOnlyDigits
-                        ? newValue.compactMap(\.wholeNumberValue).map(String.init).joined()
-                        : newValue
-                    text = maximumLength.map { String(filtered.prefix($0)) } ?? filtered
-                }
 
                 if isSecure {
                     Button {
@@ -490,6 +482,7 @@ struct SettingsView: View {
         }
     }
 
+    /// يجلب بيانات البروفايل والسجل الطبي عند فتح الإعدادات
     private func fetchSettings() async {
         await settingsStore.fetch()
         guard settingsStore.errorMessage == nil else {
@@ -525,6 +518,7 @@ struct SettingsView: View {
         )
     }
 
+    /// يجهز بيانات الحاج المعدلة ثم يرسلها للحفظ
     private func saveProfile(_ updatedProfile: ProfileData) {
         let previousAge = settingsStore.profile.age
         let updatedAge = Int(updatedProfile.age) ?? 0
@@ -559,6 +553,7 @@ struct SettingsView: View {
         }
     }
 
+    /// يجهز بيانات السجل الطبي المعدلة ثم يرسلها للحفظ
     private func saveMedicalRecord(_ updatedRecord: MedicalRecordData) {
         settingsStore.medicalRecord = PilgrimMedicalSettings(
             bloodType: updatedRecord.bloodType,

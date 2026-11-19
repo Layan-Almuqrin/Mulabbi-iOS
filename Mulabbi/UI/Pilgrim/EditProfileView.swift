@@ -14,6 +14,7 @@ struct EditProfileView: View {
     @State private var validationMessage: String?
     @State private var verifiedEmail: String
     @State private var isShowingEmailVerification = false
+    @AppStorage("appLanguage") private var appLanguage = "en"
 
     private let builtInLanguages = ["Arabic", "English", "Urdu"]
 
@@ -66,13 +67,14 @@ struct EditProfileView: View {
                             text: $draft.age,
                             fieldHeight: 46,
                             isInvalid: invalidFields.contains(.age),
-                            keyboardType: .numberPad,
-                            allowsOnlyDigits: true,
-                            maximumLength: 3
+                            keyboardType: .numberPad
                         )
                         .id(ProfileField.age)
                     }
-                    .environment(\.layoutDirection, .leftToRight)
+                    .environment(
+                        \.layoutDirection,
+                        appLanguage == "ar" ? .rightToLeft : .leftToRight
+                    )
 
                     HStack(alignment: .top, spacing: 10) {
                         SettingsTextField(
@@ -91,7 +93,10 @@ struct EditProfileView: View {
                         )
                         .id(ProfileField.lastName)
                     }
-                    .environment(\.layoutDirection, .leftToRight)
+                    .environment(
+                        \.layoutDirection,
+                        appLanguage == "ar" ? .rightToLeft : .leftToRight
+                    )
 
                     SettingsTextField(
                         title: "Password",
@@ -178,7 +183,6 @@ struct EditProfileView: View {
                     onVerified: {
                         verifiedEmail = draft.email.normalizedEmail
                         isShowingEmailVerification = false
-                        onSave(draft)
                     }
                 )
                 .transition(.opacity)
@@ -280,8 +284,12 @@ struct EditProfileView: View {
         return "Passwords do not match"
     }
 
+    /// يتأكد من صحة بيانات الحاج قبل الانتقال إلى الحفظ
     private func validateAndSave(using proxy: ScrollViewProxy) {
         var invalid: Set<ProfileField> = []
+
+        draft.age = draft.age.withWesternDigits
+        draft.phoneNumber = draft.phoneNumber.withWesternDigits
 
         if !draft.username.isValidSignupUsername { invalid.insert(.username) }
         if draft.age.isBlank {
@@ -349,6 +357,7 @@ struct EditProfileView: View {
             }
             return
         }
+        /// يفتح تحقق الإيميل فقط إذا تم تغيير البريد
         if draft.email.normalizedEmail != verifiedEmail {
             isShowingEmailVerification = true
         } else {
@@ -397,8 +406,19 @@ extension String {
     }
 
     var isValidAge: Bool {
-        guard let value = Int(self) else { return false }
+        let digits = trimmingCharacters(in: .whitespacesAndNewlines)
+        guard digits.count <= 3,
+              digits.allSatisfy({ $0.isASCII && $0.isNumber }),
+              let value = Int(digits)
+        else { return false }
         return value >= 15
+    }
+
+    var withWesternDigits: String {
+        map { character in
+            character.wholeNumberValue.map(String.init) ?? String(character)
+        }
+        .joined()
     }
 
     var isValidSignupUsername: Bool {
@@ -427,7 +447,9 @@ struct EmailVerificationView: View {
     @State private var message: String?
     @State private var isChecking = false
     @State private var isSending = false
-    @State private var didSendInitialLink = false
+    @State private var didSendLink = false
+    @State private var currentPassword = ""
+    @State private var isPasswordVisible = false
     @AppStorage("appLanguage") private var appLanguage = "en"
 
     private var isArabic: Bool { appLanguage == "ar" }
@@ -435,109 +457,172 @@ struct EmailVerificationView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.28)
+            MulabbiAuthBackdrop()
                 .ignoresSafeArea()
 
-            VStack(spacing: 12) {
-                closeButton
-
-                Image(systemName: "envelope.badge")
-                    .font(.system(size: 38))
-                    .foregroundStyle(AppColors.brandRed)
-
-                Text(tr("Verify Your Email", "تأكيد البريد الإلكتروني"))
-                    .font(.system(size: 27, weight: .bold))
-
-                Text(tr(
-                    "We sent a verification link to your new email",
-                    "أرسلنا رابط تحقق إلى بريدك الجديد"
-                ))
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(.gray.opacity(0.72))
-                    .multilineTextAlignment(.center)
-                    .padding(.top, 2)
-
-                Text(email)
-                    .font(.system(size: 15))
-                    .padding(.top, 1)
-
-                if let message {
-                    Text(message)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(AppColors.brandRed)
-                        .multilineTextAlignment(.center)
-                }
-
-                Button {
-                    checkVerification()
-                } label: {
-                    Group {
-                        if isChecking {
-                            ProgressView().tint(.white)
-                        } else {
-                            Text(tr("I verified my email", "تحققت من بريدي"))
-                                .font(.system(size: 17, weight: .bold))
-                        }
+            VStack {
+                HStack {
+                    Button(action: onClose) {
+                        Image(systemName: isArabic ? "chevron.right" : "chevron.left")
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundStyle(.white)
+                            .frame(width: 48, height: 48)
+                            .background(Color.mulabbiMaroon)
+                            .clipShape(RoundedRectangle(cornerRadius: 16))
                     }
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 46)
-                    .background(AppColors.brandRed, in: Capsule())
+
+                    Spacer()
                 }
-                .buttonStyle(.plain)
-                .disabled(isChecking || isSending)
+                .padding(.horizontal, 22)
+                .padding(.top, 24)
 
-                Button {
-                    sendVerificationLink()
-                } label: {
-                    Text(isSending
-                         ? tr("Sending…", "جارٍ الإرسال…")
-                         : tr("Resend verification link", "إعادة إرسال رابط التحقق"))
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(AppColors.brandRed)
+                Spacer()
+
+                VStack(spacing: 14) {
+                    Image(systemName: "envelope.badge")
+                        .font(.system(size: 42))
+                        .foregroundColor(Color.mulabbiMaroon)
+
+                    Text(tr("Verify your new email", "تأكيد البريد الإلكتروني الجديد"))
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(Color.mulabbiMaroon)
+
+                    Text(email)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.black)
+                        .multilineTextAlignment(.center)
+                        .textSelection(.enabled)
+
+                    if didSendLink {
+                        Text(tr(
+                            "Open the email and tap the link, then return here.",
+                            "افتحي رسالة البريد واضغطي الرابط، ثم عودي هنا."
+                        ))
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+
+                        Button(action: checkVerification) {
+                            Group {
+                                if isChecking {
+                                    ProgressView().tint(.white)
+                                } else {
+                                    Text(tr(
+                                        "I verified my email",
+                                        "تم التحقق من البريد الإلكتروني"
+                                    ))
+                                    .font(.system(size: 16, weight: .semibold))
+                                }
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.mulabbiMaroon)
+                            .clipShape(Capsule())
+                        }
+                        .disabled(isChecking || isSending)
+
+                        Button(action: sendVerificationLink) {
+                            Text(isSending
+                                 ? tr("Sending…", "جارٍ الإرسال…")
+                                 : tr("Resend verification link", "إعادة إرسال رابط التحقق"))
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(Color.mulabbiMaroon)
+                        }
+                        .disabled(isChecking || isSending)
+                    } else {
+                        Text(tr(
+                            "Enter your current password before sending the link.",
+                            "أدخلي كلمة المرور الحالية قبل إرسال الرابط."
+                        ))
+                        .font(.system(size: 12))
+                        .foregroundColor(.gray)
+                        .multilineTextAlignment(.center)
+
+                        HStack(spacing: 10) {
+                            Image(systemName: "lock")
+                                .foregroundStyle(.gray)
+
+                            Group {
+                                if isPasswordVisible {
+                                    TextField(
+                                        tr("Current password", "كلمة المرور الحالية"),
+                                        text: $currentPassword
+                                    )
+                                } else {
+                                    SecureField(
+                                        tr("Current password", "كلمة المرور الحالية"),
+                                        text: $currentPassword
+                                    )
+                                }
+                            }
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+
+                            Button {
+                                isPasswordVisible.toggle()
+                            } label: {
+                                Image(systemName: isPasswordVisible ? "eye" : "eye.slash")
+                                    .foregroundStyle(.black)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .environment(\.layoutDirection, .leftToRight)
+                        .padding(.horizontal, 12)
+                        .frame(height: 46)
+                        .background(Color.gray.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+
+                        Button(action: sendVerificationLink) {
+                            Group {
+                                if isSending {
+                                    ProgressView().tint(.white)
+                                } else {
+                                    Text(tr("Send verification link", "إرسال رابط التحقق"))
+                                        .font(.system(size: 16, weight: .semibold))
+                                }
+                            }
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.mulabbiMaroon)
+                            .clipShape(Capsule())
+                        }
+                        .disabled(currentPassword.isEmpty || isSending)
+                    }
+
+                    if let message {
+                        Text(message)
+                            .font(.system(size: 12))
+                            .foregroundColor(Color.mulabbiMaroon)
+                            .multilineTextAlignment(.center)
+                    }
                 }
-                .buttonStyle(.plain)
-                .disabled(isChecking || isSending)
+                .padding(.horizontal, 22)
+                .padding(.vertical, 24)
+                .frame(maxWidth: 350)
+                .background(Color.white)
+                .clipShape(RoundedRectangle(cornerRadius: 20))
 
-                Spacer(minLength: 20)
-            }
-            .padding(.horizontal, 28)
-            .frame(maxWidth: 360)
-            .frame(height: 360)
-            .background(.white, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-            .padding(.horizontal, 26)
-            .shadow(color: .black.opacity(0.12), radius: 10, y: 4)
-        }
-        .task {
-            if !didSendInitialLink {
-                didSendInitialLink = true
-                await sendVerificationLinkAsync()
+                Spacer()
             }
         }
-    }
-
-    private var closeButton: some View {
-        HStack {
-            Spacer()
-
-            Button(action: onClose) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.black)
-                    .frame(width: 36, height: 36)
-            }
-            .buttonStyle(.plain)
-        }
-        .frame(height: 44)
-        .padding(.trailing, -14)
+        .environment(\.layoutDirection, isArabic ? .rightToLeft : .leftToRight)
     }
 
     private func sendVerificationLink() {
         Task { await sendVerificationLinkAsync() }
     }
 
+    /// يتأكد من كلمة المرور ثم يرسل رابط التحقق للإيميل الجديد
     private func sendVerificationLinkAsync() async {
-        guard let user = Auth.auth().currentUser else {
+        guard !currentPassword.isEmpty else {
+            message = tr("Enter your current password.", "أدخلي كلمة المرور الحالية.")
+            return
+        }
+
+        guard let user = Auth.auth().currentUser,
+              let currentEmail = user.email else {
             message = tr("Please log in again.", "يرجى تسجيل الدخول مرة أخرى.")
             return
         }
@@ -546,29 +631,34 @@ struct EmailVerificationView: View {
         defer { isSending = false }
 
         do {
+            let credential = EmailAuthProvider.credential(
+                withEmail: currentEmail,
+                password: currentPassword
+            )
+            try await user.reauthenticate(with: credential)
+            Auth.auth().languageCode = isArabic ? "ar" : "en"
             try await user.sendEmailVerification(beforeUpdatingEmail: email)
+            didSendLink = true
             message = tr(
                 "Verification link sent. Open it, then return here.",
                 "تم إرسال رابط التحقق. افتحيه ثم عودي هنا."
             )
         } catch {
-            message = error.localizedDescription
+            message = emailErrorText(error)
         }
     }
 
+    /// يتأكد أن المستخدم فتح رابط التحقق قبل الرجوع للبروفايل
     private func checkVerification() {
         Task {
-            guard let user = Auth.auth().currentUser else {
-                message = tr("Please log in again.", "يرجى تسجيل الدخول مرة أخرى.")
-                return
-            }
-
             isChecking = true
             defer { isChecking = false }
 
             do {
-                try await user.reload()
-                if Auth.auth().currentUser?.email?.normalizedEmail == email.normalizedEmail {
+                let updatedUser = try await refreshedUser()
+
+                if updatedUser.isEmailVerified,
+                   updatedUser.email?.normalizedEmail == email.normalizedEmail {
                     onVerified()
                 } else {
                     message = tr(
@@ -577,8 +667,76 @@ struct EmailVerificationView: View {
                     )
                 }
             } catch {
-                message = error.localizedDescription
+                message = emailErrorText(error)
             }
+        }
+    }
+
+    /// يحدث بيانات الحساب أو يعيد تسجيله إذا انتهت الجلسة
+    private func refreshedUser() async throws -> User {
+        if let user = Auth.auth().currentUser {
+            do {
+                try await user.reload()
+                if let refreshedUser = Auth.auth().currentUser {
+                    return refreshedUser
+                }
+            } catch {
+                return try await signInWithNewEmail()
+            }
+        }
+
+        return try await signInWithNewEmail()
+    }
+
+    /// يعيد تسجيل الحساب بالإيميل الجديد بعد التحقق
+    private func signInWithNewEmail() async throws -> User {
+        try await Auth.auth().signIn(
+            withEmail: email,
+            password: currentPassword
+        ).user
+    }
+
+    private func emailErrorText(_ error: Error) -> String {
+        switch AuthErrorCode(rawValue: (error as NSError).code) {
+        case .requiresRecentLogin:
+            return tr(
+                "Please log in again, then retry changing the email.",
+                "يرجى تسجيل الدخول من جديد ثم إعادة محاولة تغيير البريد."
+            )
+        case .emailAlreadyInUse:
+            return tr(
+                "This email is already used by another account.",
+                "هذا البريد مستخدم في حساب آخر."
+            )
+        case .invalidEmail:
+            return tr(
+                "Enter a valid email address.",
+                "يرجى إدخال بريد إلكتروني صحيح."
+            )
+        case .networkError:
+            return tr(
+                "Check your connection and try again.",
+                "تحققي من الاتصال بالإنترنت ثم حاولي مرة أخرى."
+            )
+        case .tooManyRequests:
+            return tr(
+                "Too many attempts. Please try again later.",
+                "حدثت محاولات كثيرة. حاولي مرة أخرى لاحقًا."
+            )
+        case .wrongPassword, .invalidCredential:
+            return tr(
+                didSendLink
+                    ? "Open the verification link first and check your password."
+                    : "The current password is incorrect.",
+                didSendLink
+                    ? "افتحي رابط التحقق أولًا وتأكدي من كلمة المرور."
+                    : "كلمة المرور الحالية غير صحيحة."
+            )
+        default:
+            return tr(
+                "Could not verify the new email. Please try again.",
+                "تعذر التحقق من البريد الجديد. حاولي مرة أخرى."
+            )
         }
     }
 }
@@ -626,13 +784,6 @@ struct PhoneNumberField: View {
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .padding(.horizontal, 12)
-                    .onChange(of: number) { _, newValue in
-                        let digits = newValue
-                            .compactMap(\.wholeNumberValue)
-                            .map(String.init)
-                            .joined()
-                        number = String(digits.prefix(maxNationalDigitCount))
-                    }
             }
             .environment(\.layoutDirection, .leftToRight)
             .frame(height: fieldHeight)
