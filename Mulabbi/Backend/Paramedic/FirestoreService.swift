@@ -8,16 +8,15 @@ final class FirestoreService {
     private let database: Firestore
     
     
-    // يجهّز الاتصال بقاعدة بيانات Firestore.
+    // يجهّز الاتصال بقاعدة بيانات Firestore
     private init() {
         database = Firestore.firestore()
     }
     
     
-    // MARK: - Read Documents
-    
-    // يرجع جميع مستندات المجموعة المحددة.
-    func fetchDocuments(
+    // نجيب كل السجلات من المجموعة اللي نحددها
+  
+        func fetchDocuments(
         from collectionName: String
     ) async throws -> [QueryDocumentSnapshot] {
         
@@ -28,10 +27,8 @@ final class FirestoreService {
         return snapshot.documents
     }
     
-    
-    // MARK: - Emergency Alerts
-    
-    // يقرأ مستندات مجموعة البلاغات المحددة.
+    // نجيب بيانات البلاغات من المجموعة اللي حددناها
+ 
     func fetchEmergencyAlerts(
         from collectionName: String
     ) async throws -> [QueryDocumentSnapshot] {
@@ -44,9 +41,9 @@ final class FirestoreService {
     }
     
     
-    // MARK: - Update Document
+   
     
-    // يحدّث الحقول المرسلة داخل المستند المحدد.
+// نختار السجل اللي نبي نعدله ونغير فيه بس الخانات اللي نحددها
     func updateDocument(
         collectionName: String,
         documentID: String,

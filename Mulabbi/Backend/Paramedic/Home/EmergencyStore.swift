@@ -30,7 +30,7 @@ final class EmergencyStore: ObservableObject {
     @Published private(set) var isCompletingEmergency = false
     @Published var emergencyError: String?
 
-    // Existing callers share this feed; reopening a screen never adds listeners.
+// اذا التطبيق يستقبل تحديثات البلاغات ما نشغل الاستقبال مره ثانيه لما المسعف يرجع للخريطة
     func loadEmergencies() async { startListeningForEmergencies() }
 
     func startListeningForEmergencies() {
@@ -65,7 +65,7 @@ final class EmergencyStore: ObservableObject {
         } catch { emergencyError = error.localizedDescription }
     }
 
-    /// Return success so the UI only navigates after the transaction commits.
+   // اذا انحفظ البلاغ باسم المسعف نفتح له شاشة متابعة البلاغ 
     func acceptEmergency(emergencyID: UUID) async -> Bool {
         guard !currentParamedicUsername.isEmpty, !isAcceptingEmergency,
               let emergency = emergencyLocations.first(where: { $0.id == emergencyID }),

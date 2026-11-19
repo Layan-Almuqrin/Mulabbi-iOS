@@ -3,7 +3,7 @@ import MapKit
 
 enum ParamedicDataMapper {
     
-    // يجمع بيانات الحاج وسجله الطبي في نموذج المريض المستخدم في واجهة البلاغ.
+    // يجمع بيانات الحاج وسجله الطبي في نموذج المريض المستخدم في واجهة البلاغ
     static func makeEmergencyPatient(
         pilgrim: PilgrimModel,
         medicalRecord: MedicalRecordModel
@@ -27,7 +27,7 @@ enum ParamedicDataMapper {
     }
     
     
-    // يربط بيانات المريض بإحداثيات الموقع ورقم البلاغ لعرضه على الخريطة.
+    // يربط بيانات المريض بإحداثيات الموقع ورقم البلاغ لعرضه على الخريطة
     static func makeEmergencyLocation(
         alert: EmergencyAlertModel,
         location: LocationModel,
@@ -42,6 +42,7 @@ enum ParamedicDataMapper {
         
         return EmergencyLocation(
             alertID: alert.alertID,
+            paramedicUsername: alert.paramedicUsername,
             coordinate: CLLocationCoordinate2D(
                 latitude: location.latitude,
                 longitude: location.longitude
@@ -51,7 +52,7 @@ enum ParamedicDataMapper {
     }
     
     
-    // يجهّز نموذج بلاغ المرافق مع بيانات التواصل ووصف الحالة.
+    // يجهّز نموذج بلاغ المرافق مع بيانات التواصل ووصف الحالة
     static func makeCompanionEmergencyReport(
         companionReport: CompanionReportModel,
         reporterName: String,
@@ -69,7 +70,7 @@ enum ParamedicDataMapper {
     }
     
     
-    // يربط بلاغ المرافق بالموقع ورقم البلاغ لعرضه على الخريطة.
+    // يربط بلاغ المرافق بالموقع ورقم البلاغ لعرضه على الخريطة
     static func makeCompanionEmergencyLocation(
         alert: EmergencyAlertModel,
         location: LocationModel,
@@ -86,6 +87,7 @@ enum ParamedicDataMapper {
         
         return EmergencyLocation(
             alertID: alert.alertID,
+            paramedicUsername: alert.paramedicUsername,
             coordinate: CLLocationCoordinate2D(
                 latitude: location.latitude,
                 longitude: location.longitude

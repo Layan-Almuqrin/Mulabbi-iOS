@@ -74,6 +74,11 @@ struct CompanionEmergencyDetailsView: View {
     }
     
     
+    private var reporterName: String {
+        let name = report.reporterName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? report.reporterUsername : name
+    }
+
     var body: some View {
         
         ZStack {
@@ -118,18 +123,16 @@ struct CompanionEmergencyDetailsView: View {
                     
                     
                     
-                    if !report.isRequestForOther {
-                        Text(report.reporterName)
-                            .font(
-                                .system(
-                                    size: 30,
-                                    weight: .semibold
-                                )
+                    Text(reporterName)
+                        .font(
+                            .system(
+                                size: 30,
+                                weight: .semibold
                             )
-                            .foregroundStyle(.black)
-                            .padding(.top, 0)
-                            .padding(.bottom, 8)
-                    }
+                        )
+                        .foregroundStyle(.black)
+                        .padding(.top, 0)
+                        .padding(.bottom, 8)
                     
                     
                   
