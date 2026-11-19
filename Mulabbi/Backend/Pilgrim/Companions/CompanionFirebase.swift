@@ -93,19 +93,22 @@ final class CompanionFirebase {
                 completion(.success(pilgrim))
             }
     }
-    /// يجلب بيانات صاحب الطلب ثم يحفظ طلب اضافة المرافق للطرفين بانتظار القبول
+    /// يرسل طلب اضافة مرافق ويحفظه في قاعدة البيانات بحالة انتظار
     func sendCompanionRequest(
         pilgrimUsername: String,
         companion: Companion,
+        // يعيد نجاح العملية او الخطا عند فشلها
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
+        // البحث عن بيانات المستخدم الذي يرسل طلب الإضافة
         findPilgrim(byUsername: pilgrimUsername) { result in
             switch result {
             case .success(let pilgrim):
+                // التاكد من العثور على بيانات المستخدم
                 guard let pilgrim else {
                     return
                 }
-
+                // تجهيز معلومات طلب الاضافة للطرفين
                 let requestData: [String: Any] = [
                     "pilgrimUsername": pilgrim.username,
                     "pilgrimName": pilgrim.name,
@@ -113,10 +116,12 @@ final class CompanionFirebase {
                     "companionUsername": companion.username,
                     "companionName": companion.name,
                     "companionPhoneNumber": companion.phoneNumber,
+                    // الطلب ينتظر موافقة المرافق
                     "status": "pending",
+                    // تنبيهات الطوارئ مفعلة افتراضيا
                     "isAlertEnabled": true
                 ]
-
+            // التاكد من عدم وجود مرافق مضاف او طلب معلق مسبقا
                 self.connectionStatus(
                     between: pilgrim.username,
                     and: companion.username
@@ -126,6 +131,7 @@ final class CompanionFirebase {
                         completion(.failure(error))
 
                     case .success(.available):
+            // حفظ طلب الإضافة اذا لم توجد علاقة سابقة
                         self.database.collection("companion_connections")
                             .addDocument(data: requestData) { error in
                                 if let error {
@@ -136,6 +142,7 @@ final class CompanionFirebase {
                             }
 
                     case .success:
+            // ارجاع خطا عند وجود مرافق مضاف او طلب معلق
                         completion(.failure(CompanionRequestError.alreadyExists))
                     }
                 }
@@ -145,21 +152,25 @@ final class CompanionFirebase {
             }
         }
     }
-
+    
+    /// يتحقق من حالة العلاقة بين مستخدمين لمعرفة هل هما مرافقان او لديهما طلب معلق
     func connectionStatus(
         between firstUsername: String,
         and secondUsername: String,
+        // يعيد حالة العلاقة او الخطا عند فشل قراءة البيانات
         completion: @escaping (Result<CompanionConnectionStatus, Error>) -> Void
     ) {
+        // تجهيز اسماء المستخدمين قبل فحص العلاقة بينهما
         let first = firstUsername.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let second = secondUsername.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
+        // جلب علاقات وطلبات المرافقين من قاعدة البيانات
         database.collection("companion_connections").getDocuments { snapshot, error in
             if let error {
                 completion(.failure(error))
                 return
             }
-
+            // استخراج حالة العلاقة الخاصة بالمستخدمين
             let statuses = snapshot?.documents.compactMap { document -> String? in
                 guard
                     let pilgrimUsername = document["pilgrimUsername"] as? String,
@@ -168,18 +179,18 @@ final class CompanionFirebase {
                 else {
                     return nil
                 }
-
+                // التاكد ان العلاقة تخص المستخدمين نفسهما مهما كان مرسل الطلب
                 let isSamePair = (pilgrimUsername.lowercased() == first && companionUsername.lowercased() == second)
                     || (pilgrimUsername.lowercased() == second && companionUsername.lowercased() == first)
                 return isSamePair ? status : nil
             } ?? []
-
+            // تحديد حالة العلاقة بين المستخدمين
             if statuses.contains("accepted") {
-                completion(.success(.accepted))
+                completion(.success(.accepted)) // المرافق مضاف بالفعل
             } else if statuses.contains("pending") {
-                completion(.success(.pending))
+                completion(.success(.pending)) // يوجد طلب اضافة معلق
             } else {
-                completion(.success(.available))
+                completion(.success(.available)) // يمكن ارسال طلب اضافة جديد
             }
         }
     }
@@ -324,8 +335,10 @@ final class CompanionFirebase {
     /// يجلب المرافقين المقبولين الذين تنبيهاتهم مفعله لارسال تنبيه الطوارئ لهم
     func fetchEnabledCompanions(
         for pilgrimUsername: String,
+        // يعيد قائمة المرافقين او الخطا عند فشل قراءة البيانات
         completion: @escaping (Result<[Companion], Error>) -> Void
     ) {
+        // البحث عن علاقات المرافقين الخاصه بالمستخدم
         database.collection("companion_connections")
             .whereField("pilgrimUsername", isEqualTo: pilgrimUsername)
             .getDocuments { snapshot, error in
@@ -333,7 +346,7 @@ final class CompanionFirebase {
                     completion(.failure(error))
                     return
                 }
-
+                // اختيار المرافقين المقبولين والمفعل عندهم التنبيه فقط
                 let companions = snapshot?.documents.compactMap { document -> Companion? in
                     guard
                         let status = document["status"] as? String,
@@ -346,7 +359,7 @@ final class CompanionFirebase {
                     else {
                         return nil
                     }
-
+                    // تجهيز بيانات المرافق ليصل اليه تنبيه الطوارئ
                     return Companion(
                         name: companionName,
                         username: companionUsername,
@@ -355,7 +368,7 @@ final class CompanionFirebase {
                         connectionId: document.documentID
                     )
                 } ?? []
-
+                // ازالة اي مرافق مكرر ثم اعادة القائمه
                 completion(.success(self.removeDuplicateCompanions(companions)))
             }
     }
