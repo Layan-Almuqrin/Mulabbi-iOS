@@ -295,6 +295,8 @@ struct CaseHistoryDetailsView: View {
                                     vertical: true
                                 )
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading)
                         .padding(.horizontal, 14)
                         .padding(.top, 14)
                         .padding(.bottom, 16)

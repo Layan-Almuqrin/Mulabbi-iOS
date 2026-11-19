@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import CoreLocation
 
 struct ParamedicHomeView: View {
     
@@ -39,6 +40,7 @@ struct ParamedicHomeView: View {
     
     
     @State private var isMapVisible = false
+    @State private var visibleMapRect: MKMapRect?
     @StateObject private var mapRoute = ParamedicMapRoute()
     @StateObject private var profileStore = ParamedicSettingsStore()
     @State private var cameraPosition: MapCameraPosition = .region(
@@ -66,63 +68,171 @@ struct ParamedicHomeView: View {
         return "\(emergencyStore.activeEmergencyID?.uuidString ?? ""):\(coordinate.latitude):\(coordinate.longitude)"
     }
 
+    private var visibleEmergencyLocations: [EmergencyLocation] {
+        let assigned = emergencyStore.emergencyLocations.filter { location in
+            if let owner = location.paramedicUsername, !owner.isEmpty {
+                return ParamedicEmergencySchema.sameUsername(owner, emergencyStore.currentParamedicUsername)
+            }
+            return location.id == emergencyStore.activeEmergencyID
+        }
+        guard let coordinate = mapRoute.paramedicLocation else { return assigned }
+        let currentLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+
+        let nearest = emergencyStore.emergencyLocations
+            .filter {
+                ($0.paramedicUsername ?? "").isEmpty && $0.id != emergencyStore.activeEmergencyID
+            }
+            .map { location in
+                let destination = CLLocation(
+                    latitude: location.coordinate.latitude,
+                    longitude: location.coordinate.longitude
+                )
+                return (location: location, distance: currentLocation.distance(from: destination))
+            }
+            .sorted {
+                if $0.distance == $1.distance {
+                    return ($0.location.alertID ?? $0.location.id.uuidString)
+                        < ($1.location.alertID ?? $1.location.id.uuidString)
+                }
+                return $0.distance < $1.distance
+            }
+            .prefix(5)
+            .map { $0.location }
+        return assigned + nearest
+    }
+
+    private struct EmergencyPin: Identifiable {
+        let location: EmergencyLocation
+        let point: CGPoint
+        let displayCoordinate: CLLocationCoordinate2D
+
+        var id: UUID { location.id }
+    }
+
+    private func emergencyPins(in size: CGSize) -> [EmergencyPin] {
+        let region = cameraPosition.region
+        let center = region?.center ?? CLLocationCoordinate2D(latitude: 21.4225, longitude: 39.8262)
+        let span = region?.span ?? MKCoordinateSpan(latitudeDelta: 0.018, longitudeDelta: 0.018)
+        let topLeft = MKMapPoint(CLLocationCoordinate2D(
+            latitude: center.latitude + span.latitudeDelta / 2,
+            longitude: center.longitude - span.longitudeDelta / 2
+        ))
+        let bottomRight = MKMapPoint(CLLocationCoordinate2D(
+            latitude: center.latitude - span.latitudeDelta / 2,
+            longitude: center.longitude + span.longitudeDelta / 2
+        ))
+        let rect = visibleMapRect ?? MKMapRect(
+            x: topLeft.x, y: topLeft.y,
+            width: abs(bottomRight.x - topLeft.x), height: abs(bottomRight.y - topLeft.y)
+        )
+        let xScale = max(Double(size.width), 1) / max(rect.width, 1)
+        let yScale = max(Double(size.height), 1) / max(rect.height, 1)
+
+        let markerDiameter: CGFloat = 146
+        let screen = CGRect(
+            x: -size.width / 2, y: -size.height / 2,
+            width: size.width, height: size.height
+        ).insetBy(dx: markerDiameter / 2, dy: markerDiameter / 2)
+        var pins: [EmergencyPin] = []
+        for location in visibleEmergencyLocations {
+            let coordinate = MKMapPoint(location.coordinate)
+            let origin = CGPoint(
+                x: (coordinate.x - rect.midX) * xScale,
+                y: (coordinate.y - rect.midY) * yScale
+            )
+            let occupied = pins.map(\.point)
+
+            func isClear(_ point: CGPoint) -> Bool {
+                occupied.allSatisfy { hypot(point.x - $0.x, point.y - $0.y) >= markerDiameter }
+            }
+
+            var position = origin
+            if !isClear(origin) {
+                var nearestClearPoint: CGPoint?
+                for ring in 1...(occupied.count + 1) {
+                    let radius = CGFloat(ring) * markerDiameter
+                    let candidates = (0..<8).map { direction in
+                        let angle = CGFloat(direction) * .pi / 4
+                        return CGPoint(
+                            x: origin.x + cos(angle) * radius,
+                            y: origin.y + sin(angle) * radius
+                        )
+                    }
+                    let clearPoints = candidates.filter(isClear)
+                    if nearestClearPoint == nil { nearestClearPoint = clearPoints.first }
+                    if let onScreen = clearPoints.first(where: screen.contains) {
+                        nearestClearPoint = onScreen
+                        break
+                    }
+                }
+                if let nearestClearPoint {
+                    position = nearestClearPoint
+                }
+            }
+
+            let isDisplaced = position != origin
+            let displayCoordinate = isDisplaced ? MKMapPoint(
+                x: Double(position.x) / xScale + rect.midX,
+                y: Double(position.y) / yScale + rect.midY
+            ).coordinate : location.coordinate
+            pins.append(EmergencyPin(
+                location: location,
+                point: position,
+                displayCoordinate: displayCoordinate
+            ))
+        }
+        return pins
+    }
+
+    @ViewBuilder
+    private func emergencyDetails(for location: EmergencyLocation) -> some View {
+        switch location.type {
+        case .patient(let patient):
+            EmergencyDetailsView(
+                patient: patient,
+                emergencyID: location.id,
+                emergencyStore: emergencyStore,
+                emergencyLocation: location.coordinate,
+                homePath: $homePath,
+                homeNavigationID: $homeNavigationID
+            )
+        case .companion(let report):
+            CompanionEmergencyDetailsView(
+                report: report,
+                emergencyID: location.id,
+                emergencyStore: emergencyStore,
+                emergencyLocation: location.coordinate,
+                homePath: $homePath,
+                homeNavigationID: $homeNavigationID
+            )
+        }
+    }
+
     var body: some View {
         
         ZStack {
             
             
             
-            Map(position: $cameraPosition) {
-                
-                ForEach(emergencyStore.emergencyLocations) { location in
-                    
-                    Annotation(
-                        "",
-                        coordinate: location.coordinate,
-                        anchor: .center
-                    ) {
-                        
-                        NavigationLink {
-                            
-                            switch location.type {
-                                
-                                
-                                
-                            case .patient(let patient):
-                                
-                                EmergencyDetailsView(
-                                    patient: patient,
-                                    emergencyID: location.id,
-                                    emergencyStore: emergencyStore,
-                                    emergencyLocation: location.coordinate,
-                                    homePath: $homePath,
-                                    homeNavigationID: $homeNavigationID
-                                )
-                                
-                                
-                                
-                            case .companion(let report):
-                                
-                                CompanionEmergencyDetailsView(
-                                    report: report,
-                                    emergencyID: location.id,
-                                    emergencyStore: emergencyStore,
-                                    emergencyLocation: location.coordinate,
-                                    homePath: $homePath,
-                                    homeNavigationID: $homeNavigationID
-                                )
+            GeometryReader { geometry in
+                Map(position: $cameraPosition) {
+                    ForEach(emergencyPins(in: geometry.size)) { pin in
+                        Annotation("", coordinate: pin.displayCoordinate, anchor: .center) {
+                            NavigationLink {
+                                emergencyDetails(for: pin.location)
+                            } label: {
+                                CompanionLocationMarker()
                             }
-                            
-                        } label: {
-                            
-                            CompanionLocationMarker()
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
                     }
+                    ParamedicRouteOverlay(route: mapRoute)
                 }
-                ParamedicRouteOverlay(route: mapRoute)
+                .mapStyle(.standard)
+                .onMapCameraChange(frequency: .onEnd) { context in
+                    visibleMapRect = context.rect
+                }
             }
-            .mapStyle(.standard)
             .onAppear {
                 isMapVisible = true
                 mapRoute.start(to: activeEmergencyCoordinate)
@@ -133,7 +243,7 @@ struct ParamedicHomeView: View {
             }
             .onChange(of: activeRouteKey) { _, _ in
                 guard isMapVisible else { return }
-                mapRoute.start(to: activeEmergencyCoordinate)
+                mapRoute.updateDestination(activeEmergencyCoordinate)
             }
             .onReceive(mapRoute.$initialRegion) { region in
                 if let region { cameraPosition = .region(region) }
@@ -174,7 +284,7 @@ struct ParamedicHomeView: View {
                             )
                         
                         
-                        Text("Welcome \(profileStore.profile.firstName.isEmpty ? emergencyStore.currentParamedicUsername : profileStore.profile.firstName) !")
+                        Text(profileStore.profile.firstName.isEmpty ? "Welcome!" : "Welcome \(profileStore.profile.firstName) !")
                             .font(
                                 .system(
                                     size: 23,
@@ -215,6 +325,7 @@ struct EmergencyLocation: Identifiable {
     let id: UUID
     
     let alertID: String?
+    let paramedicUsername: String?
     
     let coordinate: CLLocationCoordinate2D
     
@@ -224,12 +335,14 @@ struct EmergencyLocation: Identifiable {
     init(
         id: UUID = UUID(),
         alertID: String? = nil,
+        paramedicUsername: String? = nil,
         coordinate: CLLocationCoordinate2D,
         type: EmergencyType
     ) {
         
         self.id = id
         self.alertID = alertID
+        self.paramedicUsername = paramedicUsername
         self.coordinate = coordinate
         self.type = type
     }

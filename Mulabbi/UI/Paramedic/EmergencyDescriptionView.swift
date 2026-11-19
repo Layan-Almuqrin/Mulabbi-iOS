@@ -27,6 +27,7 @@ struct EmergencyDescriptionView: View {
     
     
     @StateObject private var mapRoute = ParamedicMapRoute()
+    @StateObject private var profileStore = ParamedicSettingsStore()
     @State private var cameraPosition: MapCameraPosition
     
     
@@ -226,7 +227,7 @@ struct EmergencyDescriptionView: View {
                                 )
                             
                             
-                            Text("Welcome \(emergencyStore.currentParamedicUsername) !")
+                            Text(profileStore.profile.firstName.isEmpty ? "Welcome!" : "Welcome \(profileStore.profile.firstName) !")
                                 .font(
                                     .system(
                                         size: 23,
@@ -500,6 +501,9 @@ struct EmergencyDescriptionView: View {
             .hidden,
             for: .navigationBar
         )
+        .task {
+            await profileStore.fetch()
+        }
     }
 }
 

@@ -53,6 +53,7 @@ final class ParamedicSettingsStore: ObservableObject {
     private let database = Firestore.firestore()
     private var savedUsername = ""
 
+    // يجلب بيانات المسعف من فايرستور
     func fetch() async {
         guard !isLoading else { return }
 
@@ -71,12 +72,14 @@ final class ParamedicSettingsStore: ObservableObject {
             }
 
             profile = ParamedicProfileSettings(data: data)
+            profile.email = Auth.auth().currentUser?.email ?? profile.email
             savedUsername = profile.username
         } catch {
             errorMessage = error.localizedDescription
         }
     }
 
+    /// يحفظ تعديلات بروفايل المسعف في فايرستور
     func saveProfile(newPassword: String = "") async -> Bool {
         guard !isSaving else { return false }
 
@@ -89,14 +92,23 @@ final class ParamedicSettingsStore: ObservableObject {
                 throw ParamedicSettingsError.notSignedIn
             }
 
+            /// يتأكد أن الإيميل الجديد تم التحقق منه قبل الحفظ
+            try await user.reload()
+            guard let verifiedUser = Auth.auth().currentUser,
+                  verifiedUser.email?.normalizedEmail == profile.email.normalizedEmail
+            else {
+                throw ParamedicSettingsError.emailNotVerified
+            }
+
             if !newPassword.isEmpty {
-                try await user.updatePassword(to: newPassword)
+                try await verifiedUser.updatePassword(to: newPassword)
             }
 
             let oldUsernameKey = savedUsername.usernameKey
             let newUsernameKey = profile.username.usernameKey
-            let userDocument = database.collection("users").document(user.uid)
+            let userDocument = database.collection("users").document(verifiedUser.uid)
 
+            /// يحفظ البيانات القابلة للتعديل فقط ولا يغير الشهادة
             let editableData: [String: Any] = [
                 "username": profile.username.cleaned,
                 "age": profile.age,
@@ -106,12 +118,13 @@ final class ParamedicSettingsStore: ObservableObject {
                 "updatedAt": FieldValue.serverTimestamp()
             ]
 
+            /// يحدث بيانات اسم المستخدم أو ينشئ اسم جديد إذا تغير
             if oldUsernameKey == newUsernameKey {
                 let batch = database.batch()
                 batch.setData(editableData, forDocument: userDocument, merge: true)
                 batch.setData([
-                    "email": user.email ?? profile.email,
-                    "uid": user.uid,
+                    "email": verifiedUser.email ?? profile.email,
+                    "uid": verifiedUser.uid,
                     "role": "paramedic"
                 ], forDocument: database.collection("usernames").document(newUsernameKey), merge: true)
                 try await batch.commit()
@@ -128,8 +141,8 @@ final class ParamedicSettingsStore: ObservableObject {
                 let batch = database.batch()
                 batch.setData(editableData, forDocument: userDocument, merge: true)
                 batch.setData([
-                    "email": user.email ?? profile.email,
-                    "uid": user.uid,
+                    "email": verifiedUser.email ?? profile.email,
+                    "uid": verifiedUser.uid,
                     "role": "paramedic",
                     "certificateStatus": "appears_eligible"
                 ], forDocument: newUsernameDocument)
@@ -154,6 +167,7 @@ private enum ParamedicSettingsError: LocalizedError {
     case profileNotFound
     case invalidUsername
     case usernameTaken
+    case emailNotVerified
 
     var errorDescription: String? {
         switch self {
@@ -161,6 +175,7 @@ private enum ParamedicSettingsError: LocalizedError {
         case .profileNotFound: "Paramedic profile was not found."
         case .invalidUsername: "Username cannot be empty."
         case .usernameTaken: "Username is already taken."
+        case .emailNotVerified: "Verify the new email before saving."
         }
     }
 }

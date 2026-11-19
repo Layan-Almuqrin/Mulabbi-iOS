@@ -405,6 +405,7 @@ struct ParamedicSettingsView: View {
     }
 
     
+    /// يجلب بيانات بروفايل المسعف عند فتح الإعدادات
     private func fetchSettings() async {
         
         await settingsStore.fetch()
@@ -436,6 +437,7 @@ struct ParamedicSettingsView: View {
     }
 
     
+    /// يجهز بيانات المسعف المعدلة ثم يرسلها للحفظ
     private func saveProfile(
         _ updatedProfile: ParamedicProfileData
     ) {

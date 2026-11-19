@@ -1,7 +1,7 @@
 import Foundation
 import FirebaseFirestore
 
-/// Matches the schema written by the existing pilgrim code. No data migration.
+// نجيب تفاصيل البلاغ اللي ارسله الحاج من firebase
 enum ParamedicEmergencySchema {
     static let alerts = "emergency_alerts"
     static let locations = "locations"
