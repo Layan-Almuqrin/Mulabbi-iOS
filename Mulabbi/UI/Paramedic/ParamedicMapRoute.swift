@@ -2,8 +2,7 @@ import SwiftUI
 import MapKit
 import Combine
 
-/// Presentation and device location only. Uses the emergency coordinate already
-/// supplied by EmergencyStore; never reads or writes Firebase.
+// نرسم مسار المشي من موقع المسعف الى موقع الحاج
 @MainActor
 final class ParamedicMapRoute: ObservableObject {
     @Published private(set) var paramedicLocation: CLLocationCoordinate2D?
@@ -20,11 +19,7 @@ final class ParamedicMapRoute: ObservableObject {
     func start(to destination: CLLocationCoordinate2D?) {
         stop()
         paramedicLocation = nil
-        walkingRoute = nil
-        initialRegion = nil
-        hasFramedLocations = false
-        guard let destination, CLLocationCoordinate2DIsValid(destination) else { return }
-        self.destination = destination
+        updateDestination(destination)
         locationManager.onAuthorized = { [weak self] in
             self?.locationManager.startUpdatingLocation()
         }
@@ -40,6 +35,15 @@ final class ParamedicMapRoute: ObservableObject {
         locationManager.requestPermission()
     }
 
+    func updateDestination(_ coordinate: CLLocationCoordinate2D?) {
+        cancelDirections()
+        walkingRoute = nil
+        initialRegion = nil
+        hasFramedLocations = false
+        destination = coordinate.flatMap { CLLocationCoordinate2DIsValid($0) ? $0 : nil }
+        if let paramedicLocation { receive(paramedicLocation) }
+    }
+
     func stop() {
         locationManager.onAuthorized = nil
         locationManager.onDenied = nil
@@ -50,9 +54,10 @@ final class ParamedicMapRoute: ObservableObject {
     }
 
     private func receive(_ coordinate: CLLocationCoordinate2D) {
-        guard let destination, CLLocationCoordinate2DIsValid(coordinate) else { return }
+        guard CLLocationCoordinate2DIsValid(coordinate) else { return }
         paramedicLocation = coordinate
-        // Same first-location framing and minimum span as the companion map.
+        guard let destination else { return }
+       // اول ما نعرف موقع المسعف نضبط زوم الخريطة عشان يبان مكانه ومكان البلاغ مع بعض
         if !hasFramedLocations {
             initialRegion = MKCoordinateRegion(
                 center: coordinate,
@@ -93,7 +98,7 @@ final class ParamedicMapRoute: ObservableObject {
     }
 }
 
-/// Reuses the team's marker without modifying the companion map file.
+// نبين مكان المسعف على الخريطة بدائرة بيضاء
 struct ParamedicRouteOverlay: MapContent {
     @ObservedObject var route: ParamedicMapRoute
 

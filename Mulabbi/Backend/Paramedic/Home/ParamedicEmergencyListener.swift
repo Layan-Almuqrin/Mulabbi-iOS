@@ -1,8 +1,7 @@
 import Foundation
 import FirebaseFirestore
 
-/// One feed owned by EmergencyStore. Alerts and locations are saved separately,
-/// so both collections trigger a refresh using the existing repository mapping.
+// اذا وصل بلاغ جديد او تحدث موقع بلاغ نحدث البلاغات على خريطة المسعف
 @MainActor
 final class ParamedicEmergencyListener {
     private var registrations: [ListenerRegistration] = []
@@ -50,7 +49,7 @@ final class ParamedicEmergencyListener {
         registrations.removeAll()
         refreshTask?.cancel()
         refreshTask = nil
-        // Keep identities across background/foreground restarts for open details.
+    // اذا رجع المسعف للتطبيق وتفاصيل البلاغ مفتوحه نخلي رقم البلاغ نفسه عشان تظل التفاصيل مرتبطة فيه
     }
 
     private func refresh(
@@ -64,7 +63,7 @@ final class ParamedicEmergencyListener {
         refreshTask?.cancel()
         refreshTask = Task { [weak self] in
             do {
-                // Coalesce the initial snapshots and near-simultaneous writes.
+              // نحدث الخريطة مره وحده اذا وصل البلاغ وموقعه ورا بعض
                 try await Task.sleep(nanoseconds: 150_000_000)
                 let locations = try await ParamedicEmergencyRepository.shared
                     .fetchActiveEmergencies(paramedicUsername: paramedicUsername)
@@ -78,13 +77,14 @@ final class ParamedicEmergencyListener {
                     return EmergencyLocation(
                         id: id,
                         alertID: alertID,
+                        paramedicUsername: location.paramedicUsername,
                         coordinate: location.coordinate,
                         type: location.type
                     )
                 }
                 onUpdate(stableLocations)
             } catch is CancellationError {
-                // A newer snapshot or stop() superseded this refresh.
+              
             } catch {
                 guard let self, !Task.isCancelled,
                       self.sessionID == session,

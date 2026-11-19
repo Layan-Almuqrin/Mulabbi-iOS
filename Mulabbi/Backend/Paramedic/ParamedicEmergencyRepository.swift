@@ -15,7 +15,7 @@ final class ParamedicEmergencyRepository {
         }
     }
 
-    /// The alert ID is essential: one pilgrim can have several location records.
+  // نجيب موقع البلاغ برقم البلاغ عشان كل طلب يطلع بمكانه الصحيح
     func fetchLocation(alertID: String) async throws -> LocationModel? {
         let snapshot = try await database.collection(ParamedicEmergencySchema.locations)
             .whereField("alertId", isEqualTo: alertID).getDocuments()
@@ -24,8 +24,7 @@ final class ParamedicEmergencyRepository {
     }
 
     private func userData(username: String) async throws -> [String: Any]? {
-        // Use the same username registry as login, then fall back to the exact
-        // username query used by the companion code (for existing profiles).
+       // ندور على حساب المسعف عشان نحفظ البلاغ اللي خلصه في سجل حالاته
         let key = username.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let identity = try await database.collection("usernames").document(key).getDocument()
         if let uid = identity.data()?["uid"] as? String {
@@ -62,7 +61,7 @@ final class ParamedicEmergencyRepository {
         }
         return (reference, canonical)
     }
-
+// يمنع قبول البلاغ نفسه من مسعفين
     func acceptEmergency(alertID: String, paramedicUsername: String) async throws {
         let (_, username) = try await paramedicProfile(username: paramedicUsername)
         let alert = database.collection(ParamedicEmergencySchema.alerts).document(alertID)
@@ -87,8 +86,7 @@ final class ParamedicEmergencyRepository {
         }
     }
 
-    /// History and status are committed atomically. Keep the original document
-    /// so the pilgrim's existing status listener can observe completion.
+    // لما المسعف يخلص البلاغ نحفظه في سجله ونغير حالته الى مكتمل
     func completeEmergency(alertID: String, paramedicUsername: String, description: String) async throws {
         let (paramedic, username) = try await paramedicProfile(username: paramedicUsername)
         let alert = database.collection(ParamedicEmergencySchema.alerts).document(alertID)
@@ -125,7 +123,7 @@ final class ParamedicEmergencyRepository {
                     let current = try transaction.getDocument(alert)
                     let previousHistory = try transaction.getDocument(historyReference)
                     guard let latest = current.data() else { throw self.failure("This request no longer exists.") }
-                    // A retry after a successful commit must not duplicate history.
+                   // اذا البلاغ محفوظ من قبل ما نحفظه مره ثانيه في السجل
                     if latest["status"] as? String == "completed",
                        ParamedicEmergencySchema.sameUsername(latest["PAUsername"] as? String ?? "", username),
                        previousHistory.exists { return nil }
@@ -187,7 +185,7 @@ final class ParamedicEmergencyRepository {
         }
         return locations
     }
-
+// نقرأ البلاغات المكتملة ونحدد نوع كل بلاغ : مريض او مرافق
     func fetchCompletedEmergencies(paramedicUsername: String) async throws -> [CompletedEmergency] {
         let (paramedic, _) = try await paramedicProfile(username: paramedicUsername)
         let snapshot = try await paramedic.collection("caseHistory").getDocuments()
@@ -205,7 +203,7 @@ final class ParamedicEmergencyRepository {
             let companionUsername = data["companionUsername"] as? String
             if isRequestForOther || caseType == "report" || caseType == "companion"
                 || companionUsername != nil || data["companionProfile"] != nil {
-                // Never turn a report into a patient when its reporter profile is missing.
+               
                 let reporterData = data["companionProfile"] as? [String: Any]
                     ?? ((isRequestForOther || caseType == "report") ? profile : [:])
                 let reporter = ParamedicEmergencySchema.pilgrim(reporterData)
@@ -222,7 +220,7 @@ final class ParamedicEmergencyRepository {
                 coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
                 description: data["description"] as? String ?? data["AssistanceProvided"] as? String ?? "", completedAt: completedAt.dateValue())
         }
-        // Read-only compatibility with existing history; no migration or deletion.
+        // الحالات المكتملة تبقى في سجل المسعف حتى لو سوا تسجيل خروج ورجع دخل 
         if let legacy = try? await database.collection("PARAMEDIC")
             .whereField("PA_Username", isEqualTo: paramedicUsername).getDocuments() {
             let newIDs = Set(snapshot.documents.map(\.documentID))
