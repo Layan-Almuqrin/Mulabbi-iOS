@@ -284,7 +284,6 @@ struct EditProfileView: View {
         return "Passwords do not match"
     }
 
-    /// يتأكد من صحة بيانات الحاج قبل الانتقال إلى الحفظ
     private func validateAndSave(using proxy: ScrollViewProxy) {
         var invalid: Set<ProfileField> = []
 
@@ -357,7 +356,6 @@ struct EditProfileView: View {
             }
             return
         }
-        /// يفتح تحقق الإيميل فقط إذا تم تغيير البريد
         if draft.email.normalizedEmail != verifiedEmail {
             isShowingEmailVerification = true
         } else {
@@ -614,7 +612,6 @@ struct EmailVerificationView: View {
         Task { await sendVerificationLinkAsync() }
     }
 
-    /// يتأكد من كلمة المرور ثم يرسل رابط التحقق للإيميل الجديد
     private func sendVerificationLinkAsync() async {
         guard !currentPassword.isEmpty else {
             message = tr("Enter your current password.", "أدخلي كلمة المرور الحالية.")
@@ -648,7 +645,6 @@ struct EmailVerificationView: View {
         }
     }
 
-    /// يتأكد أن المستخدم فتح رابط التحقق قبل الرجوع للبروفايل
     private func checkVerification() {
         Task {
             isChecking = true
@@ -672,7 +668,6 @@ struct EmailVerificationView: View {
         }
     }
 
-    /// يحدث بيانات الحساب أو يعيد تسجيله إذا انتهت الجلسة
     private func refreshedUser() async throws -> User {
         if let user = Auth.auth().currentUser {
             do {
@@ -688,7 +683,6 @@ struct EmailVerificationView: View {
         return try await signInWithNewEmail()
     }
 
-    /// يعيد تسجيل الحساب بالإيميل الجديد بعد التحقق
     private func signInWithNewEmail() async throws -> User {
         try await Auth.auth().signIn(
             withEmail: email,
