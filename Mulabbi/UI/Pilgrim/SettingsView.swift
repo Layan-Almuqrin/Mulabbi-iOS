@@ -482,7 +482,6 @@ struct SettingsView: View {
         }
     }
 
-    /// يجلب بيانات البروفايل والسجل الطبي عند فتح الإعدادات
     private func fetchSettings() async {
         await settingsStore.fetch()
         guard settingsStore.errorMessage == nil else {
@@ -518,7 +517,6 @@ struct SettingsView: View {
         )
     }
 
-    /// يجهز بيانات الحاج المعدلة ثم يرسلها للحفظ
     private func saveProfile(_ updatedProfile: ProfileData) {
         let previousAge = settingsStore.profile.age
         let updatedAge = Int(updatedProfile.age) ?? 0
@@ -553,7 +551,6 @@ struct SettingsView: View {
         }
     }
 
-    /// يجهز بيانات السجل الطبي المعدلة ثم يرسلها للحفظ
     private func saveMedicalRecord(_ updatedRecord: MedicalRecordData) {
         settingsStore.medicalRecord = PilgrimMedicalSettings(
             bloodType: updatedRecord.bloodType,

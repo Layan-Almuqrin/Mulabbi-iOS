@@ -1,10 +1,11 @@
 import Foundation
 import FirebaseAuth
 
+/// مسؤول عن ارسال رسائل المساعد الذكي واستقبال الرد
 struct ChatbotService {
     static let shared = ChatbotService()
 
-    /// رابط دالة المساعد الذكي المرفوعة على Firebase
+    /// رابط المساعد الذكي المرفوع على السحابة
     private let chatbotURLString = "https://us-central1-mulabbi-c10b7.cloudfunctions.net/chatbot"
 
     /// يرسل رسالة المستخدم والمحادثة السابقة الى المساعد الذكي ثم يرجع الرد
@@ -12,19 +13,20 @@ struct ChatbotService {
         _ message: String,
         history: [ChatbotHistoryMessage]
     ) async throws -> String {
+        /// يتأكد ان رابط الدالة صحيح
         guard let url = URL(string: chatbotURLString) else {
             throw ChatbotServiceError.invalidURL
         }
 
-        /// يتأكد ان المستخدم مسجل دخوله قبل ارسال الرسالة
+        /// يتأكد ان المستخدم مسجل قبل ارسال الرسالة
         guard let user = Auth.auth().currentUser else {
             throw ChatbotServiceError.notSignedIn
         }
 
-        /// يأخذ رمز المستخدم حتى تتأكد Firebase ان الطلب من مستخدم مسجل
+        /// يأخذ رمز الحساب عشان تتأكد الدالة من المستخدم
         let idToken = try await user.getIDToken()
 
-        /// يجهز الطلب ويرسل الرسالة مع اخر رسائل من المحادثة
+        /// يجهز الرسالة والمحادثة السابقة ويرسلها للدالة السحابية
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -35,16 +37,17 @@ struct ChatbotService {
 
         let (data, response) = try await URLSession.shared.data(for: request)
 
-        /// يتأكد ان السيرفر رجع نتيجة ناجحة
+        /// يتأكد ان الرد وصل بدون مشكلة
         guard let httpResponse = response as? HTTPURLResponse,
               200..<300 ~= httpResponse.statusCode else {
             throw ChatbotServiceError.serverError
         }
 
-        /// يحول رد السيرفر الى نص يظهر للمستخدم
+        /// يحول الرد الى نص يظهر للمستخدم
         let chatbotResponse = try JSONDecoder().decode(ChatbotResponse.self, from: data)
         let reply = chatbotResponse.reply.trimmingCharacters(in: .whitespacesAndNewlines)
 
+        /// يتأكد ان الرد مو فاضي قبل ما يظهر للمستخدم
         guard !reply.isEmpty else {
             throw ChatbotServiceError.emptyReply
         }
@@ -59,7 +62,7 @@ struct ChatbotHistoryMessage: Encodable {
     let content: String
 }
 
-/// الاخطاء التي ممكن تحصل اثناء الاتصال بالمساعد الذكي
+/// الاخطاء اللي ممكن تصير وقت الاتصال بالمساعد الذكي
 enum ChatbotServiceError: Error {
     case invalidURL
     case notSignedIn
@@ -67,13 +70,13 @@ enum ChatbotServiceError: Error {
     case emptyReply
 }
 
-/// شكل البيانات التي يرسلها التطبيق الى السيرفر
+/// شكل البيانات اللي يرسلها التطبيق للدالة السحابية
 private struct ChatbotRequest: Encodable {
     let message: String
     let history: [ChatbotHistoryMessage]
 }
 
-/// شكل الرد الذي يرجع من السيرفر
+/// شكل الرد اللي يرجع من الدالة السحابية
 private struct ChatbotResponse: Decodable {
     let reply: String
 }
