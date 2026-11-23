@@ -133,6 +133,12 @@ final class PilgrimSettingsStore: ObservableObject {
                 )
             }
 
+            try await updateCompanionConnections(
+                from: savedUsername,
+                to: profile.username,
+                name: profile.fullName,
+                phoneNumber: profile.phoneNumber
+            )
             savedUsername = profile.username
             return true
         } catch {
@@ -209,6 +215,58 @@ final class PilgrimSettingsStore: ObservableObject {
 
         if !oldKey.isEmpty {
             batch.deleteDocument(database.collection("usernames").document(oldKey))
+        }
+        try await batch.commit()
+    }
+
+    private func updateCompanionConnections(
+        from oldUsername: String,
+        to newUsername: String,
+        name: String,
+        phoneNumber: String
+    ) async throws {
+        let oldUsername = oldUsername.cleaned
+        guard !oldUsername.isEmpty else { return }
+
+        async let sentRequests = database.collection("companion_connections")
+            .whereField("pilgrimUsername", isEqualTo: oldUsername)
+            .getDocuments()
+        async let receivedRequests = database.collection("companion_connections")
+            .whereField("companionUsername", isEqualTo: oldUsername)
+            .getDocuments()
+
+        let (sentSnapshot, receivedSnapshot) = try await (sentRequests, receivedRequests)
+        let cleanedUsername = newUsername.cleaned
+        let cleanedName = name.cleaned
+        let cleanedPhoneNumber = phoneNumber.cleaned
+        var references: [String: DocumentReference] = [:]
+        var updates: [String: [String: Any]] = [:]
+
+        for document in sentSnapshot.documents {
+            references[document.documentID] = document.reference
+            updates[document.documentID] = [
+                "pilgrimUsername": cleanedUsername,
+                "pilgrimName": cleanedName,
+                "pilgrimPhoneNumber": cleanedPhoneNumber
+            ]
+        }
+
+        for document in receivedSnapshot.documents {
+            references[document.documentID] = document.reference
+            updates[document.documentID, default: [:]].merge([
+                "companionUsername": cleanedUsername,
+                "companionName": cleanedName,
+                "companionPhoneNumber": cleanedPhoneNumber
+            ]) { _, new in new }
+        }
+
+        guard !updates.isEmpty else { return }
+
+        let batch = database.batch()
+        for (documentID, data) in updates {
+            if let reference = references[documentID] {
+                batch.updateData(data, forDocument: reference)
+            }
         }
         try await batch.commit()
     }

@@ -19,6 +19,11 @@ final class CompanionsStore: ObservableObject {
     @Published var requests: [Companion] = []
     /// يتواصل مع فايربيس لجلب وحفظ طلبات المرافقين
     private let companionFirebase = CompanionFirebase()
+    private var companionsListener: ListenerRegistration?
+
+    deinit {
+        companionsListener?.remove()
+    }
     
     /// يجلب طلبات المرافق الواردة للمستخدم ويعرضها في قائمة الطلبات
     func loadIncomingRequests(for username: String) {
@@ -34,6 +39,17 @@ final class CompanionsStore: ObservableObject {
     /// يجلب المرافقين المقبولين للمستخدم ويعرضهم في قائمة المرافقين
     func loadAcceptedCompanions(for username: String) {
         companionFirebase.fetchAcceptedCompanions(for: username) { result in
+            DispatchQueue.main.async {
+                if case .success(let companions) = result {
+                    self.companions = companions
+                }
+            }
+        }
+    }
+
+    func observeAcceptedCompanions(for username: String) {
+        companionsListener?.remove()
+        companionsListener = companionFirebase.observeAcceptedCompanions(for: username) { result in
             DispatchQueue.main.async {
                 if case .success(let companions) = result {
                     self.companions = companions

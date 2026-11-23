@@ -8,8 +8,12 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
 
     var onAuthorized: (() -> Void)?
     var onDenied: (() -> Void)?
+    var onInitialPermissionDenied: (() -> Void)?
     /// يستخدمه الهوم للتأكد ان موقع المستخدم وصل
     var onLocationReceived: ((CLLocationCoordinate2D) -> Void)?
+
+    private var awaitingInitialAuthorizationDecision = false
+    private var permissionWasRequested = false
     
     
     override init() {
@@ -19,14 +23,20 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
 
     
     func requestPermission() {
+        permissionWasRequested = true
+
         switch manager.authorizationStatus {
         case .notDetermined:
+            awaitingInitialAuthorizationDecision = true
             manager.requestWhenInUseAuthorization()
         case .authorizedWhenInUse, .authorizedAlways:
+            permissionWasRequested = false
             onAuthorized?()
         case .denied, .restricted:
+            permissionWasRequested = false
             onDenied?()
         @unknown default:
+            permissionWasRequested = false
             onDenied?()
         }
     }
@@ -47,11 +57,23 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         let status = manager.authorizationStatus
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
+            guard self.permissionWasRequested else { return }
+
             switch status {
             case .authorizedWhenInUse, .authorizedAlways:
+                self.awaitingInitialAuthorizationDecision = false
+                self.permissionWasRequested = false
                 self.onAuthorized?()
             case .denied, .restricted:
-                self.onDenied?()
+                let wasInitialDecision = self.awaitingInitialAuthorizationDecision
+                self.awaitingInitialAuthorizationDecision = false
+                self.permissionWasRequested = false
+
+                if wasInitialDecision {
+                    self.onInitialPermissionDenied?()
+                } else {
+                    self.onDenied?()
+                }
             case .notDetermined:
                 break
             @unknown default:
