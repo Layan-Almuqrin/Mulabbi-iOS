@@ -316,6 +316,10 @@ struct HomeView: View {
         locationManager.onDenied = {
             handleDenied()
         }
+
+        locationManager.onInitialPermissionDenied = {
+            pendingAction = nil
+        }
         /// يستلم احداثيات موقع المستخدم بعد وصولها من LocationManager
         locationManager.onLocationReceived = {
             /// عند وصول موقع المستخدم ينشئ طلب طوارئ جديد لحفظ بيانات الطلب وموقعه في قاعدة البيانات
@@ -411,7 +415,9 @@ struct HomeView: View {
     private func handlePrimaryAlertAction(_ alert: HomeAlert) {
         switch alert {
         case .locationNeeded:
-            continueAfterLocationCheck()
+            pendingAction = nil
+            guard let settingsURL = URL(string: UIApplication.openSettingsURLString) else { return }
+            UIApplication.shared.open(settingsURL)
         case .confirmSOS:
             dispatchParamedic()
         case .paramedicOnWay, .outsideServiceArea:
@@ -454,18 +460,6 @@ struct HomeView: View {
         locationManager.requestCurrentLocation()
     }
 
-    private func continueAfterLocationCheck() {
-        switch pendingAction {
-        case .sos:
-            activeAlert = .confirmSOS
-
-        case .requestForOthers:
-            activeAlert = .confirmOthers
-
-        case .none:
-            break
-        }
-    }
     /// يحفظ طلب المساعدة لشخص آخر مع الوصف والموقع الذي تم التحقق منه.
     private func sendRequestForOthers() {
         guard let coordinate = requestForOthersLocation else {

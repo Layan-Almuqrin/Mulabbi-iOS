@@ -4,9 +4,15 @@ import FirebaseFirestore
 
 enum CompanionRequestError: LocalizedError {
     case alreadyExists
+    case cannotRequestSelf
 
     var errorDescription: String? {
-        "This companion is already added or has a pending request."
+        switch self {
+        case .alreadyExists:
+            "This companion is already added or has a pending request."
+        case .cannotRequestSelf:
+            "You cannot send a companion request to yourself."
+        }
     }
 }
 
@@ -100,6 +106,18 @@ final class CompanionFirebase {
         // يعيد نجاح العملية او الخطا عند فشلها
         completion: @escaping (Result<Void, Error>) -> Void
     ) {
+        let senderUsername = pilgrimUsername
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let companionUsername = companion.username
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        guard !senderUsername.isEmpty, senderUsername != companionUsername else {
+            completion(.failure(CompanionRequestError.cannotRequestSelf))
+            return
+        }
+
         // البحث عن بيانات المستخدم الذي يرسل طلب الإضافة
         findPilgrim(byUsername: pilgrimUsername) { result in
             switch result {
@@ -283,53 +301,75 @@ final class CompanionFirebase {
         for username: String,
         completion: @escaping (Result<[Companion], Error>) -> Void
     ) {
-        let normalizedUsername = username.lowercased()
-
         database.collection("companion_connections").getDocuments { snapshot, error in
             if let error {
                 completion(.failure(error))
                 return
             }
 
-            let companions = snapshot?.documents.compactMap { document -> Companion? in
-                guard
-                    let status = document["status"] as? String,
-                    status == "accepted",
-                    let pilgrimUsername = document["pilgrimUsername"] as? String,
-                    let companionUsername = document["companionUsername"] as? String
-                else {
-                    return nil
-                }
-
-                if pilgrimUsername.lowercased() == normalizedUsername,
-                   let companionName = document["companionName"] as? String,
-                   let companionPhoneNumber = document["companionPhoneNumber"] as? String {
-                    return Companion(
-                        name: companionName,
-                        username: companionUsername,
-                        phoneNumber: companionPhoneNumber,
-                        isAlertEnabled: document["isAlertEnabled"] as? Bool ?? true,
-                        connectionId: document.documentID
-                    )
-                }
-
-                if companionUsername.lowercased() == normalizedUsername,
-                   let pilgrimName = document["pilgrimName"] as? String,
-                   let pilgrimPhoneNumber = document["pilgrimPhoneNumber"] as? String {
-                    return Companion(
-                        name: pilgrimName,
-                        username: pilgrimUsername,
-                        phoneNumber: pilgrimPhoneNumber,
-                        isAlertEnabled: document["isAlertEnabled"] as? Bool ?? true,
-                        connectionId: document.documentID
-                    )
-                }
-
-                return nil
-            } ?? []
-
-            completion(.success(self.removeDuplicateCompanions(companions)))
+            completion(.success(self.acceptedCompanions(from: snapshot, for: username)))
         }
+    }
+
+    func observeAcceptedCompanions(
+        for username: String,
+        completion: @escaping (Result<[Companion], Error>) -> Void
+    ) -> ListenerRegistration {
+        database.collection("companion_connections").addSnapshotListener { [weak self] snapshot, error in
+            guard let self else { return }
+
+            if let error {
+                completion(.failure(error))
+                return
+            }
+
+            completion(.success(self.acceptedCompanions(from: snapshot, for: username)))
+        }
+    }
+
+    private func acceptedCompanions(
+        from snapshot: QuerySnapshot?,
+        for username: String
+    ) -> [Companion] {
+        let normalizedUsername = username.lowercased()
+        let companions = snapshot?.documents.compactMap { document -> Companion? in
+            guard
+                let status = document["status"] as? String,
+                status == "accepted",
+                let pilgrimUsername = document["pilgrimUsername"] as? String,
+                let companionUsername = document["companionUsername"] as? String
+            else {
+                return nil
+            }
+
+            if pilgrimUsername.lowercased() == normalizedUsername,
+               let companionName = document["companionName"] as? String,
+               let companionPhoneNumber = document["companionPhoneNumber"] as? String {
+                return Companion(
+                    name: companionName,
+                    username: companionUsername,
+                    phoneNumber: companionPhoneNumber,
+                    isAlertEnabled: document["isAlertEnabled"] as? Bool ?? true,
+                    connectionId: document.documentID
+                )
+            }
+
+            if companionUsername.lowercased() == normalizedUsername,
+               let pilgrimName = document["pilgrimName"] as? String,
+               let pilgrimPhoneNumber = document["pilgrimPhoneNumber"] as? String {
+                return Companion(
+                    name: pilgrimName,
+                    username: pilgrimUsername,
+                    phoneNumber: pilgrimPhoneNumber,
+                    isAlertEnabled: document["isAlertEnabled"] as? Bool ?? true,
+                    connectionId: document.documentID
+                )
+            }
+
+            return nil
+        } ?? []
+
+        return removeDuplicateCompanions(companions)
     }
     
     /// يجلب المرافقين المقبولين الذين تنبيهاتهم مفعله لارسال تنبيه الطوارئ لهم

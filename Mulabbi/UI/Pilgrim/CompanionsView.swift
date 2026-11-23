@@ -68,7 +68,7 @@ struct CompanionsView: View {
                 return
             }
 
-            store.loadAcceptedCompanions(for: currentUsername)
+            store.observeAcceptedCompanions(for: currentUsername)
             store.loadIncomingRequests(for: currentUsername)
         }
     }
@@ -262,6 +262,12 @@ private struct SearchCompanionsView: View {
                     result = companion == nil ? .notFound : .found
 
                     guard let companion else { return }
+                    guard companion.username.caseInsensitiveCompare(currentUsername) != .orderedSame else {
+                        foundCompanion = nil
+                        result = .notFound
+                        return
+                    }
+
                     isCheckingConnection = true
                     companionFirebase.connectionStatus(
                         between: currentUsername,
