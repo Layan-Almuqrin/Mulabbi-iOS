@@ -52,7 +52,6 @@ struct ParamedicProfileSettings {
 /// مسؤول عن جلب بيانات المسعف وحفظ تعديلاته في قاعدة البيانات
 final class ParamedicSettingsStore: ObservableObject {
     @Published var profile = ParamedicProfileSettings()
-    private var isLoading = false
     private var isSaving = false
     @Published private(set) var errorMessage: String?
 
@@ -61,12 +60,7 @@ final class ParamedicSettingsStore: ObservableObject {
 
     /// يجلب بيانات المسعف من قاعدة البيانات ثم يعرضها في الإعدادات
     func fetch() async {
-        /// يمنع تكرار طلب الجلب اذا كان الطلب السابق ما انتهى
-        guard !isLoading else { return }
-
-        isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
 
         do {
             /// يتأكد ان المستخدم مسجل قبل جلب البيانات
@@ -131,7 +125,7 @@ final class ParamedicSettingsStore: ObservableObject {
                 "updatedAt": FieldValue.serverTimestamp()
             ]
 
-            /// يحفظ التعديلات ويحدث بيانات اسم المستخدم اذا تغير
+            /// يحفظ التعديلات 
             if oldUsernameKey == newUsernameKey {
                 let batch = database.batch()
                 batch.setData(editableData, forDocument: userDocument, merge: true)
