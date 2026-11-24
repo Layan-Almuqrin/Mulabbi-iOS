@@ -58,7 +58,10 @@ struct EditProfileView: View {
                             title: "Username",
                             text: $draft.username,
                             fieldHeight: 46,
-                            isInvalid: invalidFields.contains(.username)
+                            isInvalid: invalidFields.contains(.username),
+                            validationRules: invalidFields.contains(.username)
+                                ? draft.username.signupUsernameRules
+                                : []
                         )
                         .id(ProfileField.username)
 
@@ -103,7 +106,10 @@ struct EditProfileView: View {
                         text: $draft.password,
                         fieldHeight: 46,
                         isSecure: true,
-                        isInvalid: invalidFields.contains(.password)
+                        isInvalid: invalidFields.contains(.password),
+                        validationRules: invalidFields.contains(.password)
+                            ? draft.password.signupPasswordRules
+                            : []
                     )
                     .id(ProfileField.password)
 
@@ -386,55 +392,6 @@ private enum ProfileField: Hashable {
     case phoneNumber
     case nationality
     case languages
-}
-
-extension String {
-    var isBlank: Bool {
-        trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    var isValidEmail: Bool {
-        let value = normalizedEmail
-        let pattern = #"^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#
-        return value.range(of: pattern, options: .regularExpression) != nil
-    }
-
-    var normalizedEmail: String {
-        trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    }
-
-    var isValidAge: Bool {
-        let digits = trimmingCharacters(in: .whitespacesAndNewlines)
-        guard digits.count <= 3,
-              digits.allSatisfy({ $0.isASCII && $0.isNumber }),
-              let value = Int(digits)
-        else { return false }
-        return value >= 15
-    }
-
-    var withWesternDigits: String {
-        map { character in
-            character.wholeNumberValue.map(String.init) ?? String(character)
-        }
-        .joined()
-    }
-
-    var isValidSignupUsername: Bool {
-        (4...20).contains(count)
-            && !contains(where: \.isWhitespace)
-            && allSatisfy { character in
-                character == "_"
-                    || (character.isASCII && (character.isLetter || character.isNumber))
-            }
-            && contains { $0.isASCII && $0.isLetter }
-            && contains { $0.isASCII && $0.isNumber }
-    }
-
-    var isValidSignupPassword: Bool {
-        count >= 8
-            && contains { $0.isASCII && $0.isUppercase }
-            && contains { $0.isASCII && $0.isNumber }
-    }
 }
 
 struct EmailVerificationView: View {
@@ -772,11 +729,11 @@ struct PhoneNumberField: View {
                     .fill(Color.black.opacity(0.14))
                     .frame(width: 1, height: 30)
 
-                TextField("Phone number", text: $number)
-                    .font(.system(size: 17))
-                    .keyboardType(.phonePad)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+                SettingsNumericTextField(
+                    text: $number,
+                    keyboardType: .phonePad,
+                    placeholder: String(localized: "Phone number")
+                )
                     .padding(.horizontal, 12)
             }
             .environment(\.layoutDirection, .leftToRight)

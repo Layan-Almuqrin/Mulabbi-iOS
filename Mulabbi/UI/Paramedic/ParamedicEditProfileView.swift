@@ -70,7 +70,10 @@ struct ParamedicEditProfileView: View {
                                 title: "Username",
                                 text: $draft.username,
                                 fieldHeight: 46,
-                                isInvalid: invalidFields.contains(.username)
+                                isInvalid: invalidFields.contains(.username),
+                                validationRules: invalidFields.contains(.username)
+                                    ? draft.username.signupUsernameRules
+                                    : []
                             )
                             .id(ParamedicProfileField.username)
 
@@ -115,7 +118,10 @@ struct ParamedicEditProfileView: View {
                             text: $draft.password,
                             fieldHeight: 46,
                             isSecure: true,
-                            isInvalid: invalidFields.contains(.password)
+                            isInvalid: invalidFields.contains(.password),
+                            validationRules: invalidFields.contains(.password)
+                                ? draft.password.signupPasswordRules
+                                : []
                         )
                         .id(ParamedicProfileField.password)
 
