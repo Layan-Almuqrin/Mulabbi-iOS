@@ -31,7 +31,7 @@ final class HeartRateMonitor: ObservableObject {
 
     private let healthStore = HKHealthStore()
     private let lowerLimit = 60
-    private var upperLimit = 100
+    private var upperLimit: Int?
     private let upperLimitKey = "heartRateUpperLimit"
     private var observerQuery: HKObserverQuery?
 
@@ -66,8 +66,9 @@ final class HeartRateMonitor: ObservableObject {
         guard age >= 15 else { return }
 
         /// معادلة حساب الحد الأعلى لمعدل نبض القلب
-        upperLimit = Int(((208.0 - (0.7 * Double(age))) * 0.85).rounded())
-        UserDefaults.standard.set(upperLimit, forKey: upperLimitKey)
+        let calculatedUpperLimit = Int(((208.0 - (0.7 * Double(age))) * 0.85).rounded())
+        upperLimit = calculatedUpperLimit
+        UserDefaults.standard.set(calculatedUpperLimit, forKey: upperLimitKey)
     }
 
     /// يعيد تشغيل المتابعة إذا سبق للمستخدم تفعيلها
@@ -183,6 +184,7 @@ final class HeartRateMonitor: ObservableObject {
 
     /// يصنف القراءة وينبه فقط عند ارتفاعها أو انخفاضها
     private func process(bpm: Int) async {
+        guard let upperLimit else { return }
         guard bpm != lastBPM else { return }
         lastBPM = bpm
 
@@ -203,9 +205,13 @@ final class HeartRateMonitor: ObservableObject {
             state: state
         )
 
-        alertReading = reading
+        /// يثبت التنبيه الداخلي الحالي حتى يغلقه المستخدم
+        if alertReading == nil {
+            alertReading = reading
+        }
 
         /// يرسل التنبيه نفسه كإشعار خارج التطبيق
         await HeartRateNotifier.send(for: reading)
     }
+
 }

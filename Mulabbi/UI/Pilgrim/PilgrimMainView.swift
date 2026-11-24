@@ -4,6 +4,7 @@ struct PilgrimMainView: View {
     let onLogout: () -> Void
     @StateObject private var companionsStore = CompanionsStore()
     @StateObject private var companionEmergencyStore = CompanionEmergencyStore()
+    @StateObject private var heartRateMonitor = HeartRateMonitor.shared
     @State private var selectedTab = 0
     @State private var showCompanionSOSAlert = false
     @State private var showCompanionLocation = false
@@ -60,6 +61,13 @@ struct PilgrimMainView: View {
                         companionEmergencyStore.clearSOSRequest()
                     }
                 )
+            }
+
+            if let reading = heartRateMonitor.alertReading {
+                HeartRateSystemAlert(reading: reading) {
+                    heartRateMonitor.dismissAlert()
+                }
+                .zIndex(5)
             }
         }
         .tint(Color.mulabbiMaroon)
