@@ -1,6 +1,6 @@
 import Foundation
 
-struct CompanionReportModel: Identifiable, Codable {
+struct ThirdPartyReportModel: Identifiable, Codable {
     
     var id: String
     

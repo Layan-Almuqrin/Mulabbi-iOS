@@ -54,7 +54,7 @@ enum ParamedicDataMapper {
     
     // يجهّز نموذج بلاغ المرافق مع بيانات التواصل ووصف الحالة
     static func makeCompanionEmergencyReport(
-        companionReport: CompanionReportModel,
+        companionReport: ThirdPartyReportModel,
         reporterName: String,
         reporterPhoneNumber: String
     ) -> CompanionEmergencyReport {
@@ -74,7 +74,7 @@ enum ParamedicDataMapper {
     static func makeCompanionEmergencyLocation(
         alert: EmergencyAlertModel,
         location: LocationModel,
-        companionReport: CompanionReportModel,
+        companionReport: ThirdPartyReportModel,
         reporterName: String,
         reporterPhoneNumber: String
     ) -> EmergencyLocation {
