@@ -35,11 +35,8 @@ final class HeartRateMonitor: ObservableObject {
     private let upperLimitKey = "heartRateUpperLimit"
     private var observerQuery: HKObserverQuery?
 
-    /// تمنع تكرار التنبيه إذا استمر النبض في الحالة نفسها
-    private var lastState: HeartRateState = .normal
-
-    /// تمنع معالجة عينة النبض نفسها أكثر من مرة
-    private var lastProcessedSampleDate: Date?
+    /// تمنع تكرار التنبيه إذا لم يتغير رقم النبض
+    private var lastBPM: Int?
 
     private init() {}
 
@@ -98,8 +95,7 @@ final class HeartRateMonitor: ObservableObject {
 
         observerQuery = nil
         alertReading = nil
-        lastState = .normal
-        lastProcessedSampleDate = nil
+        lastBPM = nil
         UserDefaults.standard.set(false, forKey: "heartRateMonitoringEnabled")
     }
 
@@ -120,12 +116,18 @@ final class HeartRateMonitor: ObservableObject {
             sampleType: heartRateType,
             predicate: nil
         ) { [weak self] _, completion, error in
-            /// يؤكد انتهاء معالجة التحديث في جميع الحالات
-            defer { completion() }
-            guard error == nil else { return }
+            guard error == nil else {
+                completion()
+                return
+            }
 
             Task { @MainActor in
-                self?.fetchLatestReading(heartRateType)
+                guard let self else {
+                    completion()
+                    return
+                }
+
+                self.fetchLatestReading(heartRateType, completion: completion)
             }
         }
 
@@ -141,7 +143,10 @@ final class HeartRateMonitor: ObservableObject {
     }
 
     /// يجلب أحدث عينة نبض فقط
-    private func fetchLatestReading(_ heartRateType: HKQuantityType) {
+    private func fetchLatestReading(
+        _ heartRateType: HKQuantityType,
+        completion: (() -> Void)? = nil
+    ) {
         let newestFirst = NSSortDescriptor(
             key: HKSampleSortIdentifierEndDate,
             ascending: false
@@ -156,6 +161,7 @@ final class HeartRateMonitor: ObservableObject {
             guard error == nil,
                   let sample = samples?.first as? HKQuantitySample
             else {
+                completion?()
                 return
             }
 
@@ -163,10 +169,12 @@ final class HeartRateMonitor: ObservableObject {
 
             /// يحول القراءة إلى عدد نبضات في الدقيقة
             let bpm = Int(sample.quantity.doubleValue(for: unit).rounded())
-            let sampleDate = sample.endDate
 
             Task { @MainActor in
-                self?.process(bpm: bpm, sampleDate: sampleDate)
+                if let self {
+                    await self.process(bpm: bpm)
+                }
+                completion?()
             }
         }
 
@@ -174,9 +182,9 @@ final class HeartRateMonitor: ObservableObject {
     }
 
     /// يصنف القراءة وينبه فقط عند ارتفاعها أو انخفاضها
-    private func process(bpm: Int, sampleDate: Date) {
-        guard lastProcessedSampleDate != sampleDate else { return }
-        lastProcessedSampleDate = sampleDate
+    private func process(bpm: Int) async {
+        guard bpm != lastBPM else { return }
+        lastBPM = bpm
 
         let state: HeartRateState
 
@@ -188,14 +196,7 @@ final class HeartRateMonitor: ObservableObject {
             state = .normal
         }
 
-        guard state != .normal else {
-            /// يسمح بتنبيه جديد بعد عودة القراءة إلى الوضع الطبيعي
-            lastState = .normal
-            return
-        }
-
-        guard state != lastState else { return }
-        lastState = state
+        guard state != .normal else { return }
 
         let reading = HeartRateReading(
             bpm: bpm,
@@ -205,8 +206,6 @@ final class HeartRateMonitor: ObservableObject {
         alertReading = reading
 
         /// يرسل التنبيه نفسه كإشعار خارج التطبيق
-        Task {
-            await HeartRateNotifier.send(for: reading)
-        }
+        await HeartRateNotifier.send(for: reading)
     }
 }

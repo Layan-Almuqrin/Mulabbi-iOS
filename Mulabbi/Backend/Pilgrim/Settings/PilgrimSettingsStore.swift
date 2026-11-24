@@ -35,7 +35,6 @@ struct PilgrimMedicalSettings {
 final class PilgrimSettingsStore: ObservableObject {
     @Published var profile = PilgrimProfileSettings()
     @Published var medicalRecord = PilgrimMedicalSettings()
-    private var isLoading = false
     private var isSaving = false
     @Published private(set) var errorMessage: String?
 
@@ -44,12 +43,7 @@ final class PilgrimSettingsStore: ObservableObject {
 
     /// يجلب بيانات الحاج وسجله الطبي من قاعدة البيانات ثم يعرضها في الإعدادات
     func fetch() async {
-        /// يمنع تكرار طلب الجلب اذا كان الطلب السابق ما انتهى
-        guard !isLoading else { return }
-
-        isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
 
         do {
             /// يجلب بيانات الحساب الحالي ويتأكد انه حساب حاج
@@ -113,7 +107,7 @@ final class PilgrimSettingsStore: ObservableObject {
             var profileData = profile.firestoreData
             profileData["updatedAt"] = FieldValue.serverTimestamp()
 
-            /// يحفظ التعديلات ويحدث بيانات اسم المستخدم اذا تغير
+            /// يحفظ التعديلات
             if oldUsernameKey == newUsernameKey {
                 let batch = database.batch()
                 batch.setData(profileData, forDocument: userDocument, merge: true)
