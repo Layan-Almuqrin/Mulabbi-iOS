@@ -7,6 +7,83 @@
     ":" : {
 
     },
+    "4 to 20 characters" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "من 4 إلى 20 خانة"
+          }
+        }
+      }
+    },
+    "At least 8 characters" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "8 خانات على الأقل"
+          }
+        }
+      }
+    },
+    "At least one letter and one number" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حرف ورقم على الأقل"
+          }
+        }
+      }
+    },
+    "At least one number" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "رقم واحد على الأقل"
+          }
+        }
+      }
+    },
+    "At least one uppercase letter" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "حرف إنجليزي كبير واحد على الأقل"
+          }
+        }
+      }
+    },
+    "English letters, numbers and _ only" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "أحرف إنجليزية وأرقام و _ فقط"
+          }
+        }
+      }
+    },
+    "No spaces" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "بدون مسافات"
+          }
+        }
+      }
+    },
     "*Age" : {
       "localizations" : {
         "ar" : {
