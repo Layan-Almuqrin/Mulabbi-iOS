@@ -158,7 +158,7 @@ final class ParamedicEmergencyRepository {
                let reporter = try await fetchPilgrim(username: alert.pilgrimUsername) {
                 locations.append(ParamedicDataMapper.makeCompanionEmergencyLocation(
                     alert: alert, location: location,
-                    companionReport: CompanionReportModel(
+                    companionReport: ThirdPartyReportModel(
                         id: alert.alertID,
                         companionUsername: alert.pilgrimUsername,
                         pilgrimUsername: alert.pilgrimUsername,
@@ -172,7 +172,7 @@ final class ParamedicEmergencyRepository {
                let companion = try await fetchPilgrim(username: companionUsername) {
                 locations.append(ParamedicDataMapper.makeCompanionEmergencyLocation(
                     alert: alert, location: location,
-                    companionReport: CompanionReportModel(
+                    companionReport: ThirdPartyReportModel(
                         id: alert.alertID, companionUsername: companionUsername,
                         pilgrimUsername: alert.pilgrimUsername, situationDescription: alert.description),
                     reporterName: companion.fullName, reporterPhoneNumber: companion.phoneNumber
