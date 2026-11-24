@@ -64,8 +64,7 @@ enum ParamedicEmergencySchema {
             nationality: data["nationality"] as? String ?? "",
             language: (data["languages"] as? [String] ?? []).joined(separator: ", "),
             age: (data["age"] as? NSNumber)?.intValue ?? 0,
-            firstName: first, lastName: last, phoneNumber: data["phoneNumber"] as? String ?? "",
-            heartRate: data["heartRate"] as? Double
+            firstName: first, lastName: last, phoneNumber: data["phoneNumber"] as? String ?? ""
         )
     }
 

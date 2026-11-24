@@ -281,6 +281,7 @@
 				DEVELOPMENT_TEAM = 4899BHFDN7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Mulabbi | مُلَبّي";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Mulabbi reads heart-rate data to notify you when your heart rate is high or low.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to provide emergency assistance.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -317,6 +318,7 @@
 				DEVELOPMENT_TEAM = 4899BHFDN7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Mulabbi | مُلَبّي";
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "Mulabbi reads heart-rate data to notify you when your heart rate is high or low.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to provide emergency assistance.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;

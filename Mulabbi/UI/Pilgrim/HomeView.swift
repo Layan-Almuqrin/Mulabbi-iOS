@@ -129,13 +129,6 @@ struct HomeView: View {
                     .zIndex(4)
                 }
 
-                if let reading = heartRateMonitor.alertReading {
-                    HeartRateSystemAlert(reading: reading) {
-                        heartRateMonitor.dismissAlert()
-                    }
-                    .zIndex(5)
-                }
-
             }
         }
         /// يعرض صفحة كتابة وصف الحالة عند طلب المساعدة لشخص اخر.
@@ -577,7 +570,7 @@ private struct HomeAlertOverlay: View {
     }
 }
 
-private struct HeartRateSystemAlert: View {
+struct HeartRateSystemAlert: View {
     @AppStorage("appLanguage") private var appLanguage = "en"
     let reading: HeartRateReading
     let dismiss: () -> Void
@@ -632,9 +625,13 @@ private struct HeartRateSystemAlert: View {
             }
             .padding(26)
             .frame(maxWidth: 370)
+            .fixedSize(horizontal: false, vertical: true)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
             .shadow(color: .black.opacity(0.18), radius: 20, y: 8)
             .padding(.horizontal, 24)
+        }
+        .transaction { transaction in
+            transaction.animation = nil
         }
     }
 
