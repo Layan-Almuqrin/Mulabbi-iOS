@@ -2,26 +2,31 @@ import Combine
 import Foundation
 @preconcurrency import HealthKit
 
+/// حالات نبض القلب المستخدمة لتحديد نوع التنبيه
 enum HeartRateState: Equatable {
     case normal
     case high
     case low
 }
 
+/// تحتوي على عدد نبضات القلب وحالتها
 struct HeartRateReading {
     let bpm: Int
     let state: HeartRateState
 }
 
+/// الأخطاء التي قد تمنع بدء متابعة نبض القلب
 enum HeartRateMonitorError: Error {
     case healthDataUnavailable
     case heartRateTypeUnavailable
 }
 
 @MainActor
+/// مسؤول عن الاتصال ببيانات الصحة ومتابعة أحدث قراءة لنبض القلب
 final class HeartRateMonitor: ObservableObject {
     static let shared = HeartRateMonitor()
 
+    /// القراءة غير الطبيعية التي يعرضها التطبيق
     @Published private(set) var alertReading: HeartRateReading?
 
     private let healthStore = HKHealthStore()
@@ -29,12 +34,15 @@ final class HeartRateMonitor: ObservableObject {
     private var upperLimit = 100
     private let upperLimitKey = "heartRateUpperLimit"
     private var observerQuery: HKObserverQuery?
-    private var lastState: HeartRateState = .normal
-    private var lastProcessedSampleDate: Date?
+
+    /// تمنع تكرار التنبيه إذا لم يتغير رقم النبض
+    private var lastBPM: Int?
 
     private init() {}
 
+    /// يطلب الصلاحيات ويحسب الحد الأعلى ثم يبدأ المتابعة
     func connect(age: Int) async throws {
+        /// يتأكد أن بيانات الصحة متاحة على الجهاز
         guard HKHealthStore.isHealthDataAvailable() else {
             throw HeartRateMonitorError.healthDataUnavailable
         }
@@ -43,20 +51,26 @@ final class HeartRateMonitor: ObservableObject {
             throw HeartRateMonitorError.heartRateTypeUnavailable
         }
 
+        /// يطلب صلاحية قراءة النبض وإرسال الإشعارات
         try await healthStore.requestAuthorization(toShare: [], read: [heartRateType])
         await HeartRateNotifier.requestPermission()
 
+        /// يحفظ حالة الربط ثم يبدأ متابعة النبض
         updateAge(age)
         UserDefaults.standard.set(true, forKey: "heartRateMonitoringEnabled")
         startMonitoring(fetchCurrentReading: true)
     }
 
+    /// يحسب الحد الأعلى حسب العمر ويحفظه
     func updateAge(_ age: Int) {
         guard age >= 15 else { return }
+
+        /// معادلة حساب الحد الأعلى لمعدل نبض القلب
         upperLimit = Int(((208.0 - (0.7 * Double(age))) * 0.85).rounded())
         UserDefaults.standard.set(upperLimit, forKey: upperLimitKey)
     }
 
+    /// يعيد تشغيل المتابعة إذا سبق للمستخدم تفعيلها
     func resumeMonitoringIfEnabled() {
         guard UserDefaults.standard.bool(forKey: "heartRateMonitoringEnabled") else {
             return
@@ -69,6 +83,7 @@ final class HeartRateMonitor: ObservableObject {
         startMonitoring(fetchCurrentReading: false)
     }
 
+    /// يوقف متابعة النبض والتحديثات في الخلفية
     func disconnect() {
         if let observerQuery {
             healthStore.stop(observerQuery)
@@ -80,15 +95,16 @@ final class HeartRateMonitor: ObservableObject {
 
         observerQuery = nil
         alertReading = nil
-        lastState = .normal
-        lastProcessedSampleDate = nil
+        lastBPM = nil
         UserDefaults.standard.set(false, forKey: "heartRateMonitoringEnabled")
     }
 
+    /// يخفي تنبيه النبض الظاهر داخل التطبيق
     func dismissAlert() {
         alertReading = nil
     }
 
+    /// يبدأ مراقبة وصول عينات نبض جديدة من بيانات الصحة
     private func startMonitoring(fetchCurrentReading: Bool) {
         guard observerQuery == nil,
               let heartRateType = HKQuantityType.quantityType(forIdentifier: .heartRate)
@@ -100,16 +116,25 @@ final class HeartRateMonitor: ObservableObject {
             sampleType: heartRateType,
             predicate: nil
         ) { [weak self] _, completion, error in
-            defer { completion() }
-            guard error == nil else { return }
+            guard error == nil else {
+                completion()
+                return
+            }
 
             Task { @MainActor in
-                self?.fetchLatestReading(heartRateType)
+                guard let self else {
+                    completion()
+                    return
+                }
+
+                self.fetchLatestReading(heartRateType, completion: completion)
             }
         }
 
         observerQuery = query
         healthStore.execute(query)
+
+        /// يسمح بتنبيه التطبيق عند وصول قراءة جديدة في الخلفية
         healthStore.enableBackgroundDelivery(for: heartRateType, frequency: .immediate) { _, _ in }
 
         if fetchCurrentReading {
@@ -117,7 +142,11 @@ final class HeartRateMonitor: ObservableObject {
         }
     }
 
-    private func fetchLatestReading(_ heartRateType: HKQuantityType) {
+    /// يجلب أحدث عينة نبض فقط
+    private func fetchLatestReading(
+        _ heartRateType: HKQuantityType,
+        completion: (() -> Void)? = nil
+    ) {
         let newestFirst = NSSortDescriptor(
             key: HKSampleSortIdentifierEndDate,
             ascending: false
@@ -132,24 +161,30 @@ final class HeartRateMonitor: ObservableObject {
             guard error == nil,
                   let sample = samples?.first as? HKQuantitySample
             else {
+                completion?()
                 return
             }
 
             let unit = HKUnit.count().unitDivided(by: .minute())
+
+            /// يحول القراءة إلى عدد نبضات في الدقيقة
             let bpm = Int(sample.quantity.doubleValue(for: unit).rounded())
-            let sampleDate = sample.endDate
 
             Task { @MainActor in
-                self?.process(bpm: bpm, sampleDate: sampleDate)
+                if let self {
+                    await self.process(bpm: bpm)
+                }
+                completion?()
             }
         }
 
         healthStore.execute(query)
     }
 
-    private func process(bpm: Int, sampleDate: Date) {
-        guard lastProcessedSampleDate != sampleDate else { return }
-        lastProcessedSampleDate = sampleDate
+    /// يصنف القراءة وينبه فقط عند ارتفاعها أو انخفاضها
+    private func process(bpm: Int) async {
+        guard bpm != lastBPM else { return }
+        lastBPM = bpm
 
         let state: HeartRateState
 
@@ -161,13 +196,7 @@ final class HeartRateMonitor: ObservableObject {
             state = .normal
         }
 
-        guard state != .normal else {
-            lastState = .normal
-            return
-        }
-
-        guard state != lastState else { return }
-        lastState = state
+        guard state != .normal else { return }
 
         let reading = HeartRateReading(
             bpm: bpm,
@@ -176,8 +205,7 @@ final class HeartRateMonitor: ObservableObject {
 
         alertReading = reading
 
-        Task {
-            await HeartRateNotifier.send(for: reading)
-        }
+        /// يرسل التنبيه نفسه كإشعار خارج التطبيق
+        await HeartRateNotifier.send(for: reading)
     }
 }

@@ -114,6 +114,7 @@ struct SettingsTextField: View {
     var isSecure = false
     var isInvalid = false
     var errorMessage: String? = nil
+    var validationRules: [SettingsValidationRule] = []
     var keyboardType: UIKeyboardType = .default
 
     @State private var isPasswordVisible = false
@@ -137,6 +138,11 @@ struct SettingsTextField: View {
                         } else {
                             SecureField("", text: $text)
                         }
+                    } else if keyboardType == .numberPad {
+                        SettingsNumericTextField(
+                            text: $text,
+                            keyboardType: .numberPad
+                        )
                     } else {
                         TextField("", text: $text)
                     }
@@ -186,6 +192,88 @@ struct SettingsTextField: View {
                     )
                     .environment(\.layoutDirection, .leftToRight)
             }
+
+            if !validationRules.isEmpty {
+                VStack(spacing: 3) {
+                    ForEach(validationRules.indices, id: \.self) { index in
+                        let rule = validationRules[index]
+
+                        HStack(spacing: 4) {
+                            if appLanguage == "ar" {
+                                validationRuleText(rule)
+                                validationRuleIcon(rule)
+                            } else {
+                                validationRuleIcon(rule)
+                                validationRuleText(rule)
+                            }
+                        }
+                        .foregroundStyle(rule.isMet ? Color.green : AppColors.brandRed)
+                        .frame(
+                            maxWidth: .infinity,
+                            alignment: appLanguage == "ar" ? .trailing : .leading
+                        )
+                        .environment(\.layoutDirection, .leftToRight)
+                    }
+                }
+            }
+        }
+    }
+
+    private func validationRuleIcon(_ rule: SettingsValidationRule) -> some View {
+        Image(systemName: rule.isMet ? "checkmark.circle.fill" : "circle")
+            .font(.system(size: 10))
+    }
+
+    private func validationRuleText(_ rule: SettingsValidationRule) -> some View {
+        Text(LocalizedStringKey(rule.title))
+            .font(.system(size: 10))
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+    }
+}
+
+struct SettingsNumericTextField: UIViewRepresentable {
+    @Binding var text: String
+    let keyboardType: UIKeyboardType
+    var placeholder = ""
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeUIView(context: Context) -> UITextField {
+        let textField = UITextField()
+        textField.keyboardType = keyboardType
+        textField.font = .systemFont(ofSize: 17)
+        textField.textColor = .black
+        textField.tintColor = UIColor(AppColors.brandRed)
+        textField.textAlignment = .left
+        textField.semanticContentAttribute = .forceLeftToRight
+        textField.delegate = context.coordinator
+        textField.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.textDidChange),
+            for: .editingChanged
+        )
+        return textField
+    }
+
+    func updateUIView(_ textField: UITextField, context: Context) {
+        if textField.text != text {
+            textField.text = text
+        }
+        textField.placeholder = placeholder
+    }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        @Binding private var text: String
+
+        init(text: Binding<String>) {
+            _text = text
+        }
+
+        @objc func textDidChange(_ textField: UITextField) {
+            text = textField.text ?? ""
         }
     }
 }
@@ -482,7 +570,6 @@ struct SettingsView: View {
         }
     }
 
-    /// يجلب بيانات البروفايل والسجل الطبي عند فتح الإعدادات
     private func fetchSettings() async {
         await settingsStore.fetch()
         guard settingsStore.errorMessage == nil else {
@@ -518,7 +605,6 @@ struct SettingsView: View {
         )
     }
 
-    /// يجهز بيانات الحاج المعدلة ثم يرسلها للحفظ
     private func saveProfile(_ updatedProfile: ProfileData) {
         let previousAge = settingsStore.profile.age
         let updatedAge = Int(updatedProfile.age) ?? 0
@@ -553,7 +639,6 @@ struct SettingsView: View {
         }
     }
 
-    /// يجهز بيانات السجل الطبي المعدلة ثم يرسلها للحفظ
     private func saveMedicalRecord(_ updatedRecord: MedicalRecordData) {
         settingsStore.medicalRecord = PilgrimMedicalSettings(
             bloodType: updatedRecord.bloodType,

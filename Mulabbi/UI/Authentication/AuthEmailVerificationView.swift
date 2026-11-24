@@ -1,9 +1,3 @@
-//
-//  AuthEmailVerificationView.swift
-//  Mulabbi
-//
-//  Created by Yara Alsunbul on 21/05/1448 AH.
-//
 import SwiftUI
 import FirebaseAuth
 

@@ -70,7 +70,10 @@ struct ParamedicEditProfileView: View {
                                 title: "Username",
                                 text: $draft.username,
                                 fieldHeight: 46,
-                                isInvalid: invalidFields.contains(.username)
+                                isInvalid: invalidFields.contains(.username),
+                                validationRules: invalidFields.contains(.username)
+                                    ? draft.username.signupUsernameRules
+                                    : []
                             )
                             .id(ParamedicProfileField.username)
 
@@ -115,7 +118,10 @@ struct ParamedicEditProfileView: View {
                             text: $draft.password,
                             fieldHeight: 46,
                             isSecure: true,
-                            isInvalid: invalidFields.contains(.password)
+                            isInvalid: invalidFields.contains(.password),
+                            validationRules: invalidFields.contains(.password)
+                                ? draft.password.signupPasswordRules
+                                : []
                         )
                         .id(ParamedicProfileField.password)
 
@@ -170,7 +176,6 @@ struct ParamedicEditProfileView: View {
         .animation(.easeInOut(duration: 0.2), value: isShowingEmailVerification)
     }
 
-    /// يعرض شهادة المسعف بدون السماح بتعديلها
     private var certificateField: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Certificate")
@@ -217,7 +222,6 @@ struct ParamedicEditProfileView: View {
         return "Passwords do not match"
     }
 
-    /// يتأكد من صحة بيانات المسعف قبل الانتقال إلى الحفظ
     private func validateAndSave(using proxy: ScrollViewProxy) {
         var invalid: Set<ParamedicProfileField> = []
 
@@ -274,7 +278,6 @@ struct ParamedicEditProfileView: View {
             return
         }
 
-        /// يفتح تحقق الإيميل فقط إذا تم تغيير البريد
         if draft.email.normalizedEmail != verifiedEmail {
             isShowingEmailVerification = true
         } else {
