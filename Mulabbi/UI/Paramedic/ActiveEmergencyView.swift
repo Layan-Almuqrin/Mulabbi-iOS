@@ -170,6 +170,7 @@ struct ActiveEmergencyView: View {
             .hidden,
             for: .navigationBar
         )
+        .toolbar(.hidden, for: .tabBar)
         
         
         

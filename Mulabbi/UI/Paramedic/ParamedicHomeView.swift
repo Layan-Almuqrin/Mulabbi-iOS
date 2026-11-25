@@ -40,9 +40,10 @@ struct ParamedicHomeView: View {
     
     
     @State private var isMapVisible = false
-    @State private var visibleMapRect: MKMapRect?
+    @State private var selectedEmergency: EmergencySelection?
     @StateObject private var mapRoute = ParamedicMapRoute()
     @StateObject private var profileStore = ParamedicSettingsStore()
+    private static let allowedAreaValidator = AllowedAreaValidator()
     @State private var cameraPosition: MapCameraPosition = .region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(
@@ -68,20 +69,26 @@ struct ParamedicHomeView: View {
         return "\(emergencyStore.activeEmergencyID?.uuidString ?? ""):\(coordinate.latitude):\(coordinate.longitude)"
     }
 
-    private var visibleEmergencyLocations: [EmergencyLocation] {
-        let assigned = emergencyStore.emergencyLocations.filter { location in
-            if let owner = location.paramedicUsername, !owner.isEmpty {
-                return ParamedicEmergencySchema.sameUsername(owner, emergencyStore.currentParamedicUsername)
-            }
-            return location.id == emergencyStore.activeEmergencyID
-        }
-        guard let coordinate = mapRoute.paramedicLocation else { return assigned }
-        let currentLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+    private var allowedParamedicLocation: CLLocationCoordinate2D? {
+        // نتأكد ان موقع المسعف متوفر وانه داخل النطاق المسموح
+        guard let coordinate = mapRoute.paramedicLocation,
+              Self.allowedAreaValidator.isLocationAllowed(coordinate) else { return nil }
+        return coordinate
+    }
 
-        let nearest = emergencyStore.emergencyLocations
+    private var visibleEmergencyLocations: [EmergencyLocation] {
+        // اذا كان موقع المسعف خارج النطاق المسموح ما نعرض له بلاغات
+        guard let coordinate = allowedParamedicLocation else { return [] }
+        let currentLocation = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        return emergencyStore.emergencyLocations
             .filter {
-                ($0.paramedicUsername ?? "").isEmpty && $0.id != emergencyStore.activeEmergencyID
+                // نعرض بس البلاغات اللي داخل النطاق ولسى ما انقبلت
+                // نستبعد البلاغ النشط عشان يختفي من الخريطة اول ما يقبله المسعف
+                ($0.paramedicUsername ?? "").isEmpty
+                    && $0.id != emergencyStore.activeEmergencyID
+                    && Self.allowedAreaValidator.isLocationAllowed($0.coordinate)
             }
+        // نحسب كم يبعد كل بلاغ عن المسعف
             .map { location in
                 let destination = CLLocation(
                     latitude: location.coordinate.latitude,
@@ -89,6 +96,7 @@ struct ParamedicHomeView: View {
                 )
                 return (location: location, distance: currentLocation.distance(from: destination))
             }
+        // نرتب البلاغات من الاقرب للأبعد
             .sorted {
                 if $0.distance == $1.distance {
                     return ($0.location.alertID ?? $0.location.id.uuidString)
@@ -96,92 +104,83 @@ struct ParamedicHomeView: View {
                 }
                 return $0.distance < $1.distance
             }
+        // ناخذ اقرب خمسة من القائمة واذا الموجود اقل نعرض المتاح
             .prefix(5)
             .map { $0.location }
-        return assigned + nearest
     }
 
-    private struct EmergencyPin: Identifiable {
-        let location: EmergencyLocation
-        let point: CGPoint
-        let displayCoordinate: CLLocationCoordinate2D
-
-        var id: UUID { location.id }
+    private struct ReportMapMarker {
+        let anchor: EmergencyLocation
+        var reports: [EmergencyLocation]
     }
 
-    private func emergencyPins(in size: CGSize) -> [EmergencyPin] {
-        let region = cameraPosition.region
-        let center = region?.center ?? CLLocationCoordinate2D(latitude: 21.4225, longitude: 39.8262)
-        let span = region?.span ?? MKCoordinateSpan(latitudeDelta: 0.018, longitudeDelta: 0.018)
-        let topLeft = MKMapPoint(CLLocationCoordinate2D(
-            latitude: center.latitude + span.latitudeDelta / 2,
-            longitude: center.longitude - span.longitudeDelta / 2
-        ))
-        let bottomRight = MKMapPoint(CLLocationCoordinate2D(
-            latitude: center.latitude - span.latitudeDelta / 2,
-            longitude: center.longitude + span.longitudeDelta / 2
-        ))
-        let rect = visibleMapRect ?? MKMapRect(
-            x: topLeft.x, y: topLeft.y,
-            width: abs(bottomRight.x - topLeft.x), height: abs(bottomRight.y - topLeft.y)
-        )
-        let xScale = max(Double(size.width), 1) / max(rect.width, 1)
-        let yScale = max(Double(size.height), 1) / max(rect.height, 1)
+    private struct ReportPinPlacement: Identifiable {
+        let report: EmergencyLocation
+        let coordinate: CLLocationCoordinate2D
 
-        let markerDiameter: CGFloat = 146
-        let screen = CGRect(
-            x: -size.width / 2, y: -size.height / 2,
-            width: size.width, height: size.height
-        ).insetBy(dx: markerDiameter / 2, dy: markerDiameter / 2)
-        var pins: [EmergencyPin] = []
-        for location in visibleEmergencyLocations {
-            let coordinate = MKMapPoint(location.coordinate)
-            let origin = CGPoint(
-                x: (coordinate.x - rect.midX) * xScale,
-                y: (coordinate.y - rect.midY) * yScale
-            )
-            let occupied = pins.map(\.point)
+        var id: UUID { report.id }
+    }
 
-            func isClear(_ point: CGPoint) -> Bool {
-                occupied.allSatisfy { hypot(point.x - $0.x, point.y - $0.y) >= markerDiameter }
-            }
-
-            var position = origin
-            if !isClear(origin) {
-                var nearestClearPoint: CGPoint?
-                for ring in 1...(occupied.count + 1) {
-                    let radius = CGFloat(ring) * markerDiameter
-                    let candidates = (0..<8).map { direction in
-                        let angle = CGFloat(direction) * .pi / 4
-                        return CGPoint(
-                            x: origin.x + cos(angle) * radius,
-                            y: origin.y + sin(angle) * radius
-                        )
-                    }
-                    let clearPoints = candidates.filter(isClear)
-                    if nearestClearPoint == nil { nearestClearPoint = clearPoints.first }
-                    if let onScreen = clearPoints.first(where: screen.contains) {
-                        nearestClearPoint = onScreen
-                        break
-                    }
-                }
-                if let nearestClearPoint {
-                    position = nearestClearPoint
-                }
-            }
-
-            let isDisplaced = position != origin
-            let displayCoordinate = isDisplaced ? MKMapPoint(
-                x: Double(position.x) / xScale + rect.midX,
-                y: Double(position.y) / yScale + rect.midY
-            ).coordinate : location.coordinate
-            pins.append(EmergencyPin(
-                location: location,
-                point: position,
-                displayCoordinate: displayCoordinate
-            ))
+    private var reportPinPlacements: [ReportPinPlacement] {
+        
+        let groupingDistance: CLLocationDistance = 50
+        let reports = visibleEmergencyLocations.sorted {
+            $0.id.uuidString < $1.id.uuidString
         }
-        return pins
+
+        var markers: [ReportMapMarker] = []
+        for report in reports {
+            let reportPoint = MKMapPoint(report.coordinate)
+            if let index = markers.firstIndex(where: {
+                reportPoint.distance(to: MKMapPoint($0.anchor.coordinate)) <= groupingDistance
+            }) {
+                markers[index].reports.append(report)
+            } else {
+                markers.append(ReportMapMarker(anchor: report, reports: [report]))
+            }
+        }
+        return markers.flatMap { marker -> [ReportPinPlacement] in
+            guard marker.reports.count > 1 else {
+                return [ReportPinPlacement(report: marker.anchor, coordinate: marker.anchor.coordinate)]
+            }
+
+            
+            let anchor = MKMapPoint(marker.anchor.coordinate)
+            let spacing = 540 * MKMapPointsPerMeterAtLatitude(marker.anchor.coordinate.latitude)
+            let rowCount = (marker.reports.count + 1) / 2
+
+            return marker.reports.enumerated().map { index, report in
+                let row = index / 2
+                let column = index % 2
+                let x = (Double(column) - 0.5) * spacing
+                let y = (Double(row) - Double(rowCount - 1) / 2) * spacing
+                let coordinate = MKMapPoint(x: anchor.x + x, y: anchor.y + y).coordinate
+                return ReportPinPlacement(report: report, coordinate: coordinate)
+            }
+        }
+    }
+
+    private func reportPin(for report: EmergencyLocation) -> some View {
+        Button {
+            selectedEmergency = EmergencySelection(location: report)
+        } label: {
+            CompanionLocationMarker()
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private struct EmergencySelection: Hashable {
+        let location: EmergencyLocation
+
+        static func == (lhs: Self, rhs: Self) -> Bool {
+            lhs.location.id == rhs.location.id
+        }
+
+        func hash(into hasher: inout Hasher) {
+            hasher.combine(location.id)
+        }
     }
 
     @ViewBuilder
@@ -214,25 +213,15 @@ struct ParamedicHomeView: View {
             
             
             
-            GeometryReader { geometry in
-                Map(position: $cameraPosition) {
-                    ForEach(emergencyPins(in: geometry.size)) { pin in
-                        Annotation("", coordinate: pin.displayCoordinate, anchor: .center) {
-                            NavigationLink {
-                                emergencyDetails(for: pin.location)
-                            } label: {
-                                CompanionLocationMarker()
-                            }
-                            .buttonStyle(.plain)
-                        }
+            Map(position: $cameraPosition) {
+                ForEach(reportPinPlacements) { pin in
+                    Annotation("", coordinate: pin.coordinate, anchor: .center) {
+                        reportPin(for: pin.report)
                     }
-                    ParamedicRouteOverlay(route: mapRoute)
                 }
-                .mapStyle(.standard)
-                .onMapCameraChange(frequency: .onEnd) { context in
-                    visibleMapRect = context.rect
-                }
+                ParamedicRouteOverlay(route: mapRoute, showsWalkingRoute: allowedParamedicLocation != nil)
             }
+            .mapStyle(.standard)
             .onAppear {
                 isMapVisible = true
                 mapRoute.start(to: activeEmergencyCoordinate)
@@ -310,6 +299,9 @@ struct ParamedicHomeView: View {
             .hidden,
             for: .navigationBar
         )
+        .navigationDestination(item: $selectedEmergency) { selection in
+            emergencyDetails(for: selection.location)
+        }
         .task {
             await emergencyStore.loadEmergencies()
             await profileStore.fetch()

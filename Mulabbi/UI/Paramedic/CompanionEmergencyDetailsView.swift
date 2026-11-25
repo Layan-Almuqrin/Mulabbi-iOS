@@ -91,34 +91,19 @@ struct CompanionEmergencyDetailsView: View {
                 
                 
                 
-                ZStack {
-                    
-                    Color.mulabbiMaroon
-                    
-                    
-                    Text("Emergency Details")
-                        .font(
-                            .system(
-                                size: 31,
-                                weight: .bold
-                            )
-                        )
-                        .foregroundStyle(.white)
-                        .shadow(
-                            color: .black.opacity(0.35),
-                            radius: 2,
-                            x: 1,
-                            y: 2
-                        )
-                        .padding(.top, 42)
-                        .padding(.bottom, 12)
-                }
-                .frame(height: 120)
-                .ignoresSafeArea(edges: .top)
-                
-                
-              
-                
+                Text("Emergency Details")
+                    .font(.system(size: 29, weight: .bold))
+                    .foregroundStyle(.white)
+                    .shadow(color: .black.opacity(0.30), radius: 2, x: 1, y: 2)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .background {
+                        Color.mulabbiMaroon.ignoresSafeArea(edges: .top)
+                    }
+
                 VStack(spacing: 0) {
                     
                     
@@ -131,7 +116,10 @@ struct CompanionEmergencyDetailsView: View {
                             )
                         )
                         .foregroundStyle(.black)
-                        .padding(.top, 0)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 18)
+                        .padding(.top, 10)
                         .padding(.bottom, 8)
                     
                     
@@ -313,8 +301,11 @@ struct CompanionEmergencyDetailsView: View {
                         style: .continuous
                     )
                 )
-                .offset(y: -52)
+                .background(alignment: .top) {
+                    Color.mulabbiMaroon.frame(height: 48)
+                }
             }
+            .frame(maxHeight: .infinity, alignment: .top)
         }
         
         
