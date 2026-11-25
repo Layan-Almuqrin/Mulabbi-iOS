@@ -9,8 +9,8 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
     var onAuthorized: (() -> Void)?
     var onDenied: (() -> Void)?
     var onInitialPermissionDenied: (() -> Void)?
-    /// يستخدمه الهوم للتأكد ان موقع المستخدم وصل
     var onLocationReceived: ((CLLocationCoordinate2D) -> Void)?
+    var onLocationRequestFailed: (() -> Void)?
 
     private var awaitingInitialAuthorizationDecision = false
     private var permissionWasRequested = false
@@ -88,7 +88,7 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         onLocationReceived?(coordinate)
     }
     
-    /// يتعامل مع فشل الحصول على موقع المستخدم من الجهاز
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        onLocationRequestFailed?()
     }
 }
