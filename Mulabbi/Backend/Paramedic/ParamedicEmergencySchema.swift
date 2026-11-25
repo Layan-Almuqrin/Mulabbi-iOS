@@ -24,7 +24,8 @@ enum ParamedicEmergencySchema {
     static func isVisible(_ alert: EmergencyAlertModel, to username: String) -> Bool {
         guard ["pending", "accepted"].contains(alert.status) else { return false }
         let owner = alert.paramedicUsername ?? ""
-        return owner.isEmpty || sameUsername(owner, username)
+        if owner.isEmpty { return alert.status == "pending" }
+        return sameUsername(owner, username)
     }
 
     static func sameUsername(_ lhs: String, _ rhs: String) -> Bool {

@@ -101,6 +101,7 @@ final class ParamedicMapRoute: ObservableObject {
 // نبين مكان المسعف على الخريطة بدائرة بيضاء
 struct ParamedicRouteOverlay: MapContent {
     @ObservedObject var route: ParamedicMapRoute
+    var showsWalkingRoute = true
 
     var body: some MapContent {
         if let coordinate = route.paramedicLocation {
@@ -108,7 +109,7 @@ struct ParamedicRouteOverlay: MapContent {
                 CompanionCurrentLocationMarker()
             }
         }
-        if let walkingRoute = route.walkingRoute {
+        if showsWalkingRoute, let walkingRoute = route.walkingRoute {
             MapPolyline(walkingRoute.polyline)
                 .stroke(.red, lineWidth: 4)
         }

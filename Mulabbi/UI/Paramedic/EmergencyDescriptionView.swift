@@ -501,6 +501,7 @@ struct EmergencyDescriptionView: View {
             .hidden,
             for: .navigationBar
         )
+        .toolbar(.hidden, for: .tabBar)
         .task {
             await profileStore.fetch()
         }
