@@ -11,14 +11,7 @@ struct CompanionLocationMapView: View {
     /// يحصل على موقع المرافق اثناء فتح الخريطه
     @StateObject private var locationManager = LocationManager()
 
-    /// يحتفظ باخر موقع وصل للمرافق لتحديث خط المسافه
     @State private var companionLocation: CLLocationCoordinate2D?
-    
-    /// يحتفظ بمسار المشي الذي يتبع الطرق بين المرافق وطالب المساعدة
-    @State private var walkingRoute: MKRoute?
-    
-    /// يحتفظ بآخر موقع استُخدم لجلب المسار حتى لا يتكرر الطلب دون حاجة
-    @State private var lastRouteStart: CLLocation?
     
     /// يمنع ظهور الخريطة حتى يصل أول موقع للمرافق فتبدأ الخريطة من موقعه
     @State private var isMapReady = false
@@ -58,11 +51,6 @@ struct CompanionLocationMapView: View {
                         }
                     }
 
-                    /// يرسم مسار المشي عبر الطرق بين المرافق وطالب المساعدة
-                    if let walkingRoute {
-                        MapPolyline(walkingRoute.polyline)
-                        .stroke(.red, lineWidth: 4)
-                    }
                 }
                 .mapStyle(.standard)
             } else {
@@ -103,7 +91,6 @@ struct CompanionLocationMapView: View {
 
             locationManager.onLocationReceived = { coordinate in
                 companionLocation = coordinate
-                updateWalkingRoute(from: coordinate)
 
                 /// عند وصول أول موقع للمرافق تفتح الخريطة عنده وتُظهر موقع طالب المساعدة أيضًا
                 if !isMapReady {
@@ -130,35 +117,6 @@ struct CompanionLocationMapView: View {
         }
     }
 
-    /// يجلب طريق المشي الفعلي بين موقع المرافق وموقع الشخص الذي طلب المساعدة.
-    private func updateWalkingRoute(from companionCoordinate: CLLocationCoordinate2D) {
-        let currentCompanionLocation = CLLocation(
-            latitude: companionCoordinate.latitude,
-            longitude: companionCoordinate.longitude
-        )
-
-        if let lastRouteStart,
-           currentCompanionLocation.distance(from: lastRouteStart) < 15 {
-            return
-        }
-
-        lastRouteStart = currentCompanionLocation
-
-        let request = MKDirections.Request()
-        request.source = MKMapItem(
-            placemark: MKPlacemark(coordinate: companionCoordinate)
-        )
-        request.destination = MKMapItem(
-            placemark: MKPlacemark(coordinate: location)
-        )
-        request.transportType = .walking
-
-        MKDirections(request: request).calculate { response, _ in
-            DispatchQueue.main.async {
-                walkingRoute = response?.routes.first
-            }
-        }
-    }
 }
 
 struct CompanionLocationMarker: View {

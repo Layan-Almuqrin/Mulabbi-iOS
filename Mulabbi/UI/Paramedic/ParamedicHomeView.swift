@@ -219,7 +219,7 @@ struct ParamedicHomeView: View {
                         reportPin(for: pin.report)
                     }
                 }
-                ParamedicRouteOverlay(route: mapRoute, showsWalkingRoute: allowedParamedicLocation != nil)
+                ParamedicRouteOverlay(route: mapRoute)
             }
             .mapStyle(.standard)
             .onAppear {
