@@ -22,10 +22,11 @@ private enum PendingAction {
 }
 
 private enum HomeAlert: Identifiable {
-    case locationNeeded, confirmSOS, paramedicOnWay, confirmOthers, disconnectWatch, outsideServiceArea
+    case locationNeeded, locationUnavailable, confirmSOS, paramedicOnWay, confirmOthers, disconnectWatch, outsideServiceArea
     var id: String {
         switch self {
         case .locationNeeded: "locationNeeded"
+        case .locationUnavailable: "locationUnavailable"
         case .outsideServiceArea: "outsideServiceArea"
         case .confirmSOS: "confirmSOS"
         case .paramedicOnWay: "paramedicOnWay"
@@ -37,6 +38,7 @@ private enum HomeAlert: Identifiable {
     var title: String {
         switch self {
         case .locationNeeded: appLocalized("Location Needed")
+        case .locationUnavailable: appLocalized("Location Unavailable")
         case .outsideServiceArea: appLocalized("Outside Service Area")
         case .confirmSOS: appLocalized("Are you sure you want to send an SOS?")
         case .paramedicOnWay: appLocalized("A paramedic is on the way to help you.")
@@ -49,6 +51,8 @@ private enum HomeAlert: Identifiable {
         switch self {
         case .locationNeeded:
             appLocalized("Please enable your location so we can send help to you.")
+        case .locationUnavailable:
+            appLocalized("Unable to determine your location. Please try again.")
         case .outsideServiceArea:
             appLocalized(
                 "Emergency requests are available only within the Haram boundary, and the Holy Sites during Dhu al-Hijjah."
@@ -313,9 +317,13 @@ struct HomeView: View {
         locationManager.onInitialPermissionDenied = {
             pendingAction = nil
         }
-        /// يستلم احداثيات موقع المستخدم بعد وصولها من LocationManager
+        locationManager.onLocationRequestFailed = {
+            guard pendingAction != nil else { return }
+            DispatchQueue.main.async {
+                activeAlert = .locationUnavailable
+            }
+        }
         locationManager.onLocationReceived = {
-            /// عند وصول موقع المستخدم ينشئ طلب طوارئ جديد لحفظ بيانات الطلب وموقعه في قاعدة البيانات
             coordinate in
             let isLocationAllowed = allowedAreaValidator.isLocationAllowed(coordinate)
 
@@ -413,7 +421,7 @@ struct HomeView: View {
             UIApplication.shared.open(settingsURL)
         case .confirmSOS:
             dispatchParamedic()
-        case .paramedicOnWay, .outsideServiceArea:
+        case .paramedicOnWay, .outsideServiceArea, .locationUnavailable:
             dismissHomeAlert()
         case .confirmOthers:
             activeAlert = nil
@@ -544,7 +552,7 @@ private struct HomeAlertOverlay: View {
         switch alert {
         case .locationNeeded: appLocalized("Allow")
         case .confirmSOS: appLocalized("Send")
-        case .paramedicOnWay, .outsideServiceArea: appLocalized("OK")
+        case .paramedicOnWay, .outsideServiceArea, .locationUnavailable: appLocalized("OK")
         case .confirmOthers: appLocalized("Yes")
         case .disconnectWatch: appLocalized("Disconnect")
         }
@@ -554,7 +562,7 @@ private struct HomeAlertOverlay: View {
         switch alert {
         case .locationNeeded: appLocalized("Don't Allow")
         case .confirmSOS, .confirmOthers, .disconnectWatch: appLocalized("Cancel")
-        case .paramedicOnWay, .outsideServiceArea: nil        }
+        case .paramedicOnWay, .outsideServiceArea, .locationUnavailable: nil        }
     }
 
     private func alertButton(_ title: String, action: @escaping () -> Void) -> some View {
