@@ -1,4 +1,3 @@
-
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
@@ -78,9 +77,8 @@ struct PilgrimSignUpView: View {
         }
     }
 
-    private var usernameHasLetterAndNumber: Bool {
+    private var usernameHasLetter: Bool {
         username.contains { $0.isASCII && $0.isLetter }
-        && username.contains { $0.isASCII && $0.isNumber }
     }
 
     private var usernameHasNoSpaces: Bool {
@@ -90,7 +88,7 @@ struct PilgrimSignUpView: View {
     private var isUsernameValid: Bool {
         usernameHasValidLength
         && usernameHasValidCharacters
-        && usernameHasLetterAndNumber
+        && usernameHasLetter
         && usernameHasNoSpaces
     }
 
@@ -346,19 +344,19 @@ struct PilgrimSignUpView: View {
                                     text: $username
                                 )
                                 ruleRow(
-                                    tr("4 to 20 characters", "من 4 إلى 20 حرفاً"),
+                                    tr("4 to 20 characters", "من 4 إلى 20 خانة"),
                                     isMet: usernameHasValidLength
                                 )
                                 ruleRow(
-                                    tr("English letters, numbers and _ only", "أحرف إنجليزية وأرقام و _ فقط"),
+                                    tr("English letters, numbers and _ only", "يُسمح بالأحرف الإنجليزية والأرقام والشرطة السفلية (_) فقط"),
                                     isMet: usernameHasValidCharacters
                                 )
                                 ruleRow(
-                                    tr("At least one letter and one number", "حرف ورقم على الأقل"),
-                                    isMet: usernameHasLetterAndNumber
+                                    tr("At least one letter", "يجب أن يحتوي اسم المستخدم على حرف واحد على الأقل"),
+                                    isMet: usernameHasLetter
                                 )
                                 ruleRow(
-                                    tr("No spaces", "بدون مسافات"),
+                                    tr("No spaces", "يجب ألا يحتوي اسم المستخدم على مسافات"),
                                     isMet: usernameHasNoSpaces
                                 )
                             }
@@ -368,7 +366,8 @@ struct PilgrimSignUpView: View {
                                 inputField(
                                     title: "*Age",
                                     placeholder: "Enter your age",
-                                    text: $age
+                                    text: $age,
+                                    keyboardType: .numberPad
                                 )
                             }
                         }
@@ -402,11 +401,11 @@ struct PilgrimSignUpView: View {
                                 isVisible: $isPasswordVisible
                             )
                             ruleRow(
-                                tr("At least 8 characters", "8 أحرف على الأقل"),
+                                tr("At least 8 characters", "8 خانات على الأقل"),
                                 isMet: passwordHasMinLength
                             )
                             ruleRow(
-                                tr("At least one uppercase letter", "حرف كبير واحد على الأقل"),
+                                tr("At least one uppercase letter", "حرف إنجليزي كبير واحد على الأقل"),
                                 isMet: passwordHasUppercase
                             )
                             ruleRow(
@@ -469,32 +468,31 @@ struct PilgrimSignUpView: View {
                                     .foregroundColor(.black)
                                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                                LazyVGrid(
-                                    columns: [GridItem(.adaptive(minimum: 76), alignment: .leading)],
-                                    alignment: .leading,
-                                    spacing: 6
-                                ) {
-                                    ForEach(
-                                        ["Arabic", "English", "Urdu"] + selectedLanguages
-                                            .filter { !["Arabic", "English", "Urdu"].contains($0) }
-                                            .sorted(),
-                                        id: \.self
-                                    ) { language in
-                                        languageButton(language, value: language)
-                                    }
+                                ScrollView(.horizontal, showsIndicators: false) {
+                                    HStack(spacing: 6) {
+                                        ForEach(
+                                            ["Arabic", "English", "Urdu"] + selectedLanguages
+                                                .filter { !["Arabic", "English", "Urdu"].contains($0) }
+                                                .sorted(),
+                                            id: \.self
+                                        ) { language in
+                                            languageButton(language, value: language)
+                                        }
 
-                                    Button {
-                                        newLanguage = ""
-                                        showAddLanguage = true
-                                    } label: {
-                                        Text("+ Add")
-                                            .font(.system(size: 12))
-                                            .foregroundColor(.black)
-                                            .padding(.horizontal, 10)
-                                            .frame(height: 46)
-                                            .background(Color.gray.opacity(0.15))
-                                            .cornerRadius(6)
+                                        Button {
+                                            newLanguage = ""
+                                            showAddLanguage = true
+                                        } label: {
+                                            Text("+ Add")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.black)
+                                                .padding(.horizontal, 10)
+                                                .frame(height: 46)
+                                                .background(Color.gray.opacity(0.15))
+                                                .cornerRadius(6)
+                                        }
                                     }
+                                    .fixedSize(horizontal: true, vertical: false)
                                 }
                                 .frame(maxWidth: .infinity, alignment: .leading)
                             }
@@ -725,7 +723,8 @@ struct PilgrimSignUpView: View {
     private func inputField(
         title: LocalizedStringKey,
         placeholder: LocalizedStringKey,
-        text: Binding<String>
+        text: Binding<String>,
+        keyboardType: UIKeyboardType = .default
     ) -> some View {
 
         VStack(alignment: .leading, spacing: 6) {
@@ -744,6 +743,7 @@ struct PilgrimSignUpView: View {
                 }
                 TextField("", text: text)
                     .font(.system(size: 16))
+                    .keyboardType(keyboardType)
                     .multilineTextAlignment(textAlign)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -778,9 +778,8 @@ struct PilgrimSignUpView: View {
             Image(systemName: isMet ? "checkmark.circle.fill" : "circle")
                 .font(.system(size: 10))
             Text(text)
-                .font(.system(size: 10))
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .font(.system(size: 11))
+                .fixedSize(horizontal: false, vertical: true)
         }
         .foregroundColor(isMet ? Color.green : (showErrors ? Color.mulabbiMaroon : Color.gray))
         .frame(maxWidth: .infinity, alignment: .leading)
