@@ -85,6 +85,7 @@ struct PilgrimLoginView: View {
                     .collection("users")
                     .document(result.user.uid)
                     .getDocument()
+
                 let savedUsername = profileSnapshot.data()?["username"] as? String
                     ?? username.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -107,6 +108,7 @@ struct PilgrimLoginView: View {
             switch loginError {
             case .usernameNotFound:
                 return tr("Username not found", "اسم المستخدم غير موجود")
+
             case .emailNotVerified:
                 return tr(
                     "Please verify your email before logging in",
@@ -278,7 +280,7 @@ struct PilgrimLoginView: View {
                         }
                         .frame(
                             maxWidth: .infinity,
-                            alignment: appLanguage == "ar" ? .leading : .trailing
+                            alignment: appLanguage == "ar" ? .trailing : .trailing
                         )
 
                         if let errorMessage {
@@ -389,4 +391,3 @@ struct PilgrimLoginView: View {
 #Preview {
     PilgrimLoginView()
 }
-

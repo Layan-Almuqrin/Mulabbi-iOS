@@ -1423,6 +1423,9 @@
         }
       }
     },
+    "Link Sent" : {
+
+    },
     "Location Needed" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1875,17 +1878,6 @@
         }
       }
     },
-    "Unable to determine your location. Please try again." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ar" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "تعذر تحديد موقعك. يرجى المحاولة مرة أخرى."
-          }
-        }
-      }
-    },
     "Please enter the code sent to your email" : {
       "extractionState" : "stale",
       "localizations" : {
@@ -2077,9 +2069,6 @@
     "Send Reset Link" : {
 
     },
-    "Sending…" : {
-
-    },
     "Sent" : {
       "comment" : "A button that is disabled and shows a checkmark when pressed.",
       "extractionState" : "stale",
@@ -2158,6 +2147,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "إرسال"
+          }
+        }
+      }
+    },
+    "Unable to determine your location. Please try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذر تحديد موقعك. يرجى المحاولة مرة أخرى."
           }
         }
       }
@@ -2383,10 +2383,16 @@
     "أرسلنا رابط إعادة تعيين كلمة المرور إلى بريدك. افتحيه لإكمال العملية." : {
 
     },
+    "إرسال رابط إعادة تعيين كلمة المرور" : {
+
+    },
     "العودة لتسجيل الدخول" : {
 
     },
     "تعذر إرسال الرابط" : {
+
+    },
+    "تم إرسال الرابط" : {
 
     },
     "حسنًا" : {
