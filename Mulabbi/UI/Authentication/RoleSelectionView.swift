@@ -15,67 +15,56 @@ struct RoleSelectionView: View {
     }
 
     var body: some View {
-
         ZStack {
+            MulabbiAuthBackdrop()
+                .ignoresSafeArea()
 
-                MulabbiAuthBackdrop()
-                    .ignoresSafeArea()
-
-                VStack {
-
-                    HStack {
-
-                        Button {
-                            appLanguage = appLanguage == "ar" ? "en" : "ar"
-                        } label: {
-                            Label(
-                                appLanguage == "ar" ? "EN" : "AR",
-                                systemImage: "globe"
-                            )
-                            .font(.system(size: 18, weight: .medium))
-                            .foregroundColor(.white)
-                        }
-                        .buttonStyle(.plain)
-
-                        Spacer()
+            VStack {
+                HStack {
+                    Button {
+                        appLanguage = appLanguage == "ar" ? "en" : "ar"
+                    } label: {
+                        Label(
+                            appLanguage == "ar" ? "EN" : "AR",
+                            systemImage: "globe"
+                        )
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundColor(.white)
                     }
-                    .padding(.horizontal, 25)
-                    .padding(.top, 30)
+                    .buttonStyle(.plain)
 
                     Spacer()
-
-                    VStack(spacing: 14) {
-
-                        Button(action: onSelectParamedic) {
-
-                            Text("Paramedic")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 58)
-                                .background(
-                                    Color.mulabbiMaroon
-                                )
-                                .clipShape(Capsule())
-                        }
-
-                        Button(action: onSelectPilgrim) {
-
-                            Text("Pilgrim")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 58)
-                                .background(
-                                    Color.mulabbiMaroon
-                                )
-                                .clipShape(Capsule())
-                        }
-                    }
-                    .padding(.horizontal, 25)
-                    .padding(.bottom, 35)
                 }
+                .padding(.horizontal, 25)
+                .padding(.top, 30)
+
+                Spacer()
+
+                VStack(spacing: 14) {
+                    Button(action: onSelectParamedic) {
+                        Text("Paramedic")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 58)
+                            .background(Color.mulabbiMaroon)
+                            .clipShape(Capsule())
+                    }
+
+                    Button(action: onSelectPilgrim) {
+                        Text("Pilgrim")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 58)
+                            .background(Color.mulabbiMaroon)
+                            .clipShape(Capsule())
+                    }
+                }
+                .padding(.horizontal, 25)
+                .padding(.bottom, 35)
             }
+        }
     }
 }
 

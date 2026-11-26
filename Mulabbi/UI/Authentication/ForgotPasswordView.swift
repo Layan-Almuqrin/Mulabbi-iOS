@@ -12,27 +12,43 @@ struct ForgotPasswordView: View {
     @State private var newPassword = ""
     @State private var confirmPassword = ""
     @State private var errorMessage: String?
+
+    // نستخدمها عشان نعرف حالة الإرسال بدون ما نغيّر كلام الزر.
     @State private var isSending = false
+
+    // إذا انرسل الرابط بنجاح، نغيّر نص الزر.
+    @State private var didSendResetLink = false
 
     // هنا نرسل رابط إعادة تعيين كلمة المرور للبريد المدخل.
     private func sendResetLink() {
+        // نشيل أي مسافات ممكن تكون حول البريد بالغلط.
         let address = email.trimmingCharacters(in: .whitespacesAndNewlines)
+
         guard !address.isEmpty else {
-            errorMessage = isArabic ? "أدخلي بريدك الإلكتروني" : "Enter your email address"
+            errorMessage = isArabic
+                ? "أدخلي بريدك الإلكتروني"
+                : "Enter your email address"
             return
         }
+
         isSending = true
         errorMessage = nil
+
+        // نطلب من Firebase يرسل رابط إعادة التعيين للبريد.
         Auth.auth().sendPasswordReset(withEmail: address) { error in
             isSending = false
+
             if let error {
+                // إذا صار خطأ، نخليه يظهر للمستخدمة.
                 errorMessage = error.localizedDescription
             } else {
-                step = 2
+                // إذا نجح الإرسال، يتغير نص الزر.
+                didSendResetLink = true
             }
         }
     }
 
+    // نستخدم هالقيمة لاختيار النص واتجاه الشاشة.
     var isArabic: Bool {
         appLanguage == "ar"
     }
@@ -103,18 +119,27 @@ struct ForgotPasswordView: View {
                         .background(Color.gray.opacity(0.15))
                         .cornerRadius(6)
 
+                        // الزر يرسل الرابط، وبعد نجاح الإرسال يغيّر عبارته.
                         Button(action: {
                             sendResetLink()
                         }) {
 
-                            Text(isSending ? "Sending…" : "Send Reset Link")
-                                .font(.system(size: 14, weight: .semibold))
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 42)
-                                .background(Color.mulabbiMaroon)
-                                .clipShape(Capsule())
+                            Text(
+                                didSendResetLink
+                                    ? (isArabic ? "تم إرسال الرابط" : "Link Sent")
+                                    : (isArabic
+                                        ? "إرسال رابط إعادة تعيين كلمة المرور"
+                                        : "Send Reset Link")
+                            )
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 42)
+                            .background(Color.mulabbiMaroon)
+                            .clipShape(Capsule())
                         }
+                        // نوقف الضغط وقت الإرسال، وبعد نجاحه ما نرسل نفس الطلب مرة ثانية.
+                        .disabled(isSending || didSendResetLink)
 
                     } else if step == 2 {
 
@@ -122,10 +147,13 @@ struct ForgotPasswordView: View {
                             .font(.system(size: 20, weight: .bold))
                             .foregroundColor(.black)
 
-                        Text(isArabic ? "أرسلنا رابط إعادة تعيين كلمة المرور إلى بريدك. افتحيه لإكمال العملية." : "We sent a password reset link to your email. Open it to complete the reset.")
-                            .font(.system(size: 11))
-                            .foregroundColor(.black)
-                            .multilineTextAlignment(.center)
+                        Text(isArabic
+                            ? "أرسلنا رابط إعادة تعيين كلمة المرور إلى بريدك. افتحيه لإكمال العملية."
+                            : "We sent a password reset link to your email. Open it to complete the reset."
+                        )
+                        .font(.system(size: 11))
+                        .foregroundColor(.black)
+                        .multilineTextAlignment(.center)
 
                         Button(action: { dismiss() }) {
                             Text(isArabic ? "العودة لتسجيل الدخول" : "Back to Login")
@@ -210,11 +238,24 @@ struct ForgotPasswordView: View {
             isArabic ? .rightToLeft : .leftToRight
         )
         .navigationBarBackButtonHidden(true)
-        .alert(isArabic ? "تعذر إرسال الرابط" : "Could not send link", isPresented: Binding(get: { errorMessage != nil }, set: { if !$0 { errorMessage = nil } })) {
-            Button(isArabic ? "حسنًا" : "OK") { errorMessage = nil }
-        } message: { Text(errorMessage ?? "") }
+
+        // إذا فشل الإرسال، نعرض سبب المشكلة بلغة التطبيق.
+        .alert(
+            isArabic ? "تعذر إرسال الرابط" : "Could not send link",
+            isPresented: Binding(
+                get: { errorMessage != nil },
+                set: { if !$0 { errorMessage = nil } }
+            )
+        ) {
+            Button(isArabic ? "حسنًا" : "OK") {
+                errorMessage = nil
+            }
+        } message: {
+            Text(errorMessage ?? "")
+        }
     }
 
+    // هذا الحقل يعرض التلميح ويختار بين حقل عادي وحقل كلمة مرور.
     private func textInput(
         _ placeholder: LocalizedStringKey,
         text: Binding<String>,

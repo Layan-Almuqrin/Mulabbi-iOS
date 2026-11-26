@@ -1,4 +1,3 @@
-
 import SwiftUI
 import FirebaseAuth
 import FirebaseFirestore
@@ -59,7 +58,6 @@ struct ParamedicLoginView: View {
 
         Task {
             do {
-
                 let identity = username
                     .trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -88,36 +86,26 @@ struct ParamedicLoginView: View {
                 }
 
                 await MainActor.run {
-
                     paramedicUsername = identity
-
                     isLoading = false
-
                     onLogin()
                 }
 
             } catch {
-
                 await MainActor.run {
-
                     isLoading = false
 
                     if error as? LoginFailure == .accountNotFound {
-
                         errorMessage = tr(
                             "Account not found",
                             "الحساب غير موجود"
                         )
-
                     } else if error as? LoginFailure == .emailNotVerified {
-
                         errorMessage = tr(
                             "Please verify your email before logging in",
                             "يرجى تأكيد بريدك الإلكتروني قبل تسجيل الدخول"
                         )
-
                     } else {
-
                         errorMessage = tr(
                             "Username or password is incorrect",
                             "اسم المستخدم أو كلمة المرور غير صحيحة"
@@ -149,33 +137,16 @@ struct ParamedicLoginView: View {
                         Button(action: {
                             onBack()
                         }) {
-
                             Image(systemName: "chevron.left")
                                 .rotationEffect(
-                                    .degrees(
-                                        appLanguage == "ar"
-                                        ? 180
-                                        : 0
-                                    )
+                                    .degrees(appLanguage == "ar" ? 180 : 0)
                                 )
-                                .font(
-                                    .system(
-                                        size: 22,
-                                        weight: .bold
-                                    )
-                                )
+                                .font(.system(size: 22, weight: .bold))
                                 .foregroundStyle(.white)
-                                .frame(
-                                    width: 48,
-                                    height: 48
-                                )
-                                .background(
-                                    Color.mulabbiMaroon
-                                )
+                                .frame(width: 48, height: 48)
+                                .background(Color.mulabbiMaroon)
                                 .clipShape(
-                                    RoundedRectangle(
-                                        cornerRadius: 16
-                                    )
+                                    RoundedRectangle(cornerRadius: 16)
                                 )
                                 .shadow(
                                     color: .black.opacity(0.15),
@@ -195,27 +166,16 @@ struct ParamedicLoginView: View {
                     VStack(spacing: 12) {
 
                         Text("Welcome")
-                            .font(
-                                .system(
-                                    size: 22,
-                                    weight: .bold
-                                )
-                            )
+                            .font(.system(size: 22, weight: .bold))
                             .foregroundColor(.black)
 
                         Text("Login to your account")
-                            .font(
-                                .system(size: 15)
-                            )
+                            .font(.system(size: 15))
                             .foregroundColor(.black)
 
-                        VStack(
-                            alignment: .leading,
-                            spacing: 4
-                        ) {
+                        VStack(alignment: .leading, spacing: 4) {
 
                             HStack {
-
                                 Image(systemName: "person")
                                     .foregroundColor(.gray)
 
@@ -226,113 +186,85 @@ struct ParamedicLoginView: View {
                             }
                             .padding(.horizontal, 12)
                             .frame(height: 46)
-                            .background(
-                                Color.gray.opacity(0.15)
-                            )
+                            .background(Color.gray.opacity(0.15))
                             .cornerRadius(6)
 
-                            errorText(
-                                usernameError
-                            )
+                            errorText(usernameError)
                         }
 
-                        VStack(
-                            alignment: .leading,
-                            spacing: 4
-                        ) {
+                        VStack(alignment: .leading, spacing: 4) {
 
                             HStack {
-
                                 Image(systemName: "lock")
                                     .foregroundColor(.gray)
 
                                 textInput(
                                     "Enter your password",
                                     text: $password,
-                                    isSecure:
-                                        !isPasswordVisible
+                                    isSecure: !isPasswordVisible
                                 )
 
                                 Button {
                                     isPasswordVisible.toggle()
                                 } label: {
-
                                     Image(
-                                        systemName:
-                                            isPasswordVisible
+                                        systemName: isPasswordVisible
                                             ? "eye"
                                             : "eye.slash"
                                     )
                                     .foregroundColor(.gray)
-                                    .font(
-                                        .system(size: 16)
-                                    )
+                                    .font(.system(size: 16))
                                 }
                                 .buttonStyle(.plain)
                             }
                             .padding(.horizontal, 12)
                             .frame(height: 46)
-                            .background(
-                                Color.gray.opacity(0.15)
-                            )
+                            .background(Color.gray.opacity(0.15))
                             .cornerRadius(6)
 
-                            errorText(
-                                passwordError
-                            )
+                            errorText(passwordError)
                         }
 
-                        HStack {
+                        // الرابط ورسالة الخطأ في عمود مستقل عشان نضبط مكان الرابط.
+                        VStack(alignment: .leading, spacing: 4) {
 
                             if let errorMessage {
-
                                 Text(errorMessage)
-                                    .font(
-                                        .system(size: 11)
-                                    )
-                                    .foregroundColor(
-                                        Color.mulabbiMaroon
-                                    )
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color.mulabbiMaroon)
                                     .frame(
                                         maxWidth: .infinity,
                                         alignment: .leading
                                     )
-
-                            } else {
-
-                                Spacer()
                             }
 
                             NavigationLink(
-                                destination:
-                                    ForgotPasswordView()
+                                destination: ForgotPasswordView()
                             ) {
-
                                 Text("Forgot password?")
-                                    .font(
-                                        .system(size: 12)
-                                    )
-                                    .foregroundColor(
-                                        Color.mulabbiMaroon
-                                    )
+                                    .font(.system(size: 12))
+                                    .foregroundColor(Color.mulabbiMaroon)
                             }
+                            .frame(
+                                maxWidth: .infinity,
+                                alignment: appLanguage == "ar"
+                                    ? .leading
+                                    : .trailing
+                            )
                         }
+                        .environment(
+                            \.layoutDirection,
+                            .leftToRight
+                        )
 
                         Button(action: {
-
                             attemptLogin()
-
                         }) {
-
                             Group {
-
                                 if isLoading {
-
                                     ProgressView()
                                         .tint(.white)
-
                                 } else {
-
                                     Text("Login")
                                         .font(
                                             .system(
@@ -340,57 +272,33 @@ struct ParamedicLoginView: View {
                                                 weight: .semibold
                                             )
                                         )
-                                        .foregroundColor(
-                                            .white
-                                        )
+                                        .foregroundColor(.white)
                                 }
                             }
-                            .frame(
-                                maxWidth: .infinity
-                            )
+                            .frame(maxWidth: .infinity)
                             .frame(height: 51)
-                            .background(
-                                Color.mulabbiMaroon
-                            )
-                            .clipShape(
-                                Capsule()
-                            )
+                            .background(Color.mulabbiMaroon)
+                            .clipShape(Capsule())
                         }
                         .disabled(isLoading)
 
                         HStack(spacing: 4) {
 
-                            Text(
-                                "Don't have an account?"
-                            )
-                            .font(
-                                .system(size: 13)
-                            )
-                            .foregroundColor(.black)
+                            Text("Don't have an account?")
+                                .font(.system(size: 13))
+                                .foregroundColor(.black)
 
                             NavigationLink(
-                                destination:
-                                    ParamedicSignUpView(
-                                        onSignUp: { identity in
-
-                                            paramedicUsername =
-                                                identity
-
-                                            onLogin()
-                                        }
-                                    )
+                                destination: ParamedicSignUpView(
+                                    onSignUp: { identity in
+                                        paramedicUsername = identity
+                                        onLogin()
+                                    }
+                                )
                             ) {
-
                                 Text("Sign up")
-                                    .font(
-                                        .system(
-                                            size: 13,
-                                            weight: .bold
-                                        )
-                                    )
-                                    .foregroundColor(
-                                        Color.mulabbiMaroon
-                                    )
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(Color.mulabbiMaroon)
                             }
                         }
                     }
@@ -399,9 +307,7 @@ struct ParamedicLoginView: View {
                     .frame(width: 350)
                     .background(Color.white)
                     .clipShape(
-                        RoundedRectangle(
-                            cornerRadius: 20
-                        )
+                        RoundedRectangle(cornerRadius: 20)
                     )
 
                     Spacer()
@@ -410,17 +316,14 @@ struct ParamedicLoginView: View {
             .environment(
                 \.layoutDirection,
                 appLanguage == "ar"
-                ? .rightToLeft
-                : .leftToRight
+                    ? .rightToLeft
+                    : .leftToRight
             )
-            .toolbar(
-                .hidden,
-                for: .navigationBar
-            )
+            .toolbar(.hidden, for: .navigationBar)
         }
     }
 
-    // error under a field, only shown after Login is pressed
+    // يظهر الخطأ تحت الحقل بعد محاولة تسجيل الدخول.
     @ViewBuilder
     private func errorText(
         _ message: String?
@@ -430,12 +333,8 @@ struct ParamedicLoginView: View {
            let message = message {
 
             Text(message)
-                .font(
-                    .system(size: 11)
-                )
-                .foregroundColor(
-                    Color.mulabbiMaroon
-                )
+                .font(.system(size: 11))
+                .foregroundColor(Color.mulabbiMaroon)
                 .frame(
                     maxWidth: .infinity,
                     alignment: .leading
@@ -453,47 +352,23 @@ struct ParamedicLoginView: View {
         isSecure: Bool = false
     ) -> some View {
 
-        ZStack(
-            alignment: .leading
-        ) {
+        ZStack(alignment: .leading) {
 
             if text.wrappedValue.isEmpty {
-
                 Text(placeholder)
-                    .font(
-                        .system(size: 16)
-                    )
-                    .foregroundColor(
-                        Color.gray.opacity(0.6)
-                    )
+                    .font(.system(size: 16))
+                    .foregroundColor(Color.gray.opacity(0.6))
                     .allowsHitTesting(false)
             }
 
             if isSecure {
-
-                SecureField(
-                    "",
-                    text: text
-                )
-                .font(
-                    .system(size: 16)
-                )
-                .multilineTextAlignment(
-                    .leading
-                )
-
+                SecureField("", text: text)
+                    .font(.system(size: 16))
+                    .multilineTextAlignment(.leading)
             } else {
-
-                TextField(
-                    "",
-                    text: text
-                )
-                .font(
-                    .system(size: 16)
-                )
-                .multilineTextAlignment(
-                    .leading
-                )
+                TextField("", text: text)
+                    .font(.system(size: 16))
+                    .multilineTextAlignment(.leading)
             }
         }
         .frame(

@@ -74,9 +74,8 @@ struct ParamedicSignUpView: View {
         }
     }
 
-    private var usernameHasLetterAndNumber: Bool {
+    private var usernameHasLetter: Bool {
         username.contains { $0.isASCII && $0.isLetter }
-        && username.contains { $0.isASCII && $0.isNumber }
     }
 
     private var usernameHasNoSpaces: Bool {
@@ -86,7 +85,7 @@ struct ParamedicSignUpView: View {
     private var isUsernameValid: Bool {
         usernameHasValidLength
         && usernameHasValidCharacters
-        && usernameHasLetterAndNumber
+        && usernameHasLetter
         && usernameHasNoSpaces
     }
 
@@ -875,7 +874,7 @@ struct ParamedicSignUpView: View {
                                     ruleRow(
                                         tr(
                                             "4 to 20 characters",
-                                            "من 4 إلى 20 حرفاً"
+                                            "من 4 إلى 20 خانة"
                                         ),
                                         isMet:
                                             usernameHasValidLength
@@ -884,7 +883,7 @@ struct ParamedicSignUpView: View {
                                     ruleRow(
                                         tr(
                                             "English letters, numbers and _ only",
-                                            "أحرف إنجليزية وأرقام و _ فقط"
+                                            "يُسمح بالأحرف الإنجليزية والأرقام والشرطة السفلية (_) فقط"
                                         ),
                                         isMet:
                                             usernameHasValidCharacters
@@ -892,17 +891,17 @@ struct ParamedicSignUpView: View {
 
                                     ruleRow(
                                         tr(
-                                            "At least one letter and one number",
-                                            "حرف ورقم على الأقل"
+                                            "At least one letter",
+                                            "يجب أن يحتوي اسم المستخدم على حرف واحد على الأقل"
                                         ),
                                         isMet:
-                                            usernameHasLetterAndNumber
+                                            usernameHasLetter
                                     )
 
                                     ruleRow(
                                         tr(
                                             "No spaces",
-                                            "بدون مسافات"
+                                            "يجب ألا يحتوي اسم المستخدم على مسافات"
                                         ),
                                         isMet:
                                             usernameHasNoSpaces
@@ -918,7 +917,8 @@ struct ParamedicSignUpView: View {
                                         title: "*Age",
                                         placeholder:
                                             "Enter your age",
-                                        text: $age
+                                        text: $age,
+                                        keyboardType: .numberPad
                                     )
                                 }
                             }
@@ -976,7 +976,7 @@ struct ParamedicSignUpView: View {
                                 ruleRow(
                                     tr(
                                         "At least 8 characters",
-                                        "8 أحرف على الأقل"
+                                        "8 خانات على الأقل"
                                     ),
                                     isMet:
                                         passwordHasMinLength
@@ -985,7 +985,7 @@ struct ParamedicSignUpView: View {
                                 ruleRow(
                                     tr(
                                         "At least one uppercase letter",
-                                        "حرف كبير واحد على الأقل"
+                                        "حرف إنجليزي كبير واحد على الأقل"
                                     ),
                                     isMet:
                                         passwordHasUppercase
@@ -1424,7 +1424,8 @@ struct ParamedicSignUpView: View {
     private func inputField(
         title: LocalizedStringKey,
         placeholder: LocalizedStringKey,
-        text: Binding<String>
+        text: Binding<String>,
+        keyboardType: UIKeyboardType = .default
     ) -> some View {
 
         VStack(
@@ -1471,6 +1472,7 @@ struct ParamedicSignUpView: View {
                 .font(
                     .system(size: 16)
                 )
+                .keyboardType(keyboardType)
                 .multilineTextAlignment(
                     .leading
                 )
@@ -1559,11 +1561,11 @@ struct ParamedicSignUpView: View {
 
             Text(text)
                 .font(
-                    .system(size: 10)
+                    .system(size: 11)
                 )
-                .lineLimit(1)
-                .minimumScaleFactor(
-                    0.7
+                .fixedSize(
+                    horizontal: false,
+                    vertical: true
                 )
         }
         .foregroundColor(
@@ -1712,3 +1714,4 @@ struct ParamedicSignUpView: View {
         ParamedicSignUpView()
     }
 }
+
