@@ -57,6 +57,12 @@
       "comment" : "Privacy - Location When In Use Usage Description",
       "extractionState" : "extracted_with_value",
       "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "نستخدم موقعك لتقديم المساعدة الطارئة."
+          }
+        },
         "en" : {
           "stringUnit" : {
             "state" : "new",

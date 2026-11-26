@@ -1633,6 +1633,17 @@
         }
       }
     },
+    "No companions found" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لم يتم العثور على مرافقين"
+          }
+        }
+      }
+    },
     "No request available" : {
       "extractionState" : "manual",
       "localizations" : {
