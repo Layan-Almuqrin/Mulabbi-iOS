@@ -12,6 +12,8 @@ struct EditProfileView: View {
     @State private var isAddingLanguage = false
     @State private var languageToAdd = ""
     @State private var validationMessage: String?
+    @State private var emailErrorMessage: String?
+    @State private var isCheckingEmail = false
     @State private var verifiedEmail: String
     @State private var isShowingEmailVerification = false
     @AppStorage("appLanguage") private var appLanguage = "en"
@@ -70,6 +72,7 @@ struct EditProfileView: View {
                             text: $draft.age,
                             fieldHeight: 46,
                             isInvalid: invalidFields.contains(.age),
+                            errorMessage: ageError,
                             keyboardType: .numberPad
                         )
                         .id(ProfileField.age)
@@ -128,9 +131,14 @@ struct EditProfileView: View {
                         text: $draft.email,
                         fieldHeight: 46,
                         isInvalid: invalidFields.contains(.email),
+                        errorMessage: emailErrorMessage,
                         keyboardType: .emailAddress
                     )
                     .id(ProfileField.email)
+                    .onChange(of: draft.email) { _, _ in
+                        emailErrorMessage = nil
+                        invalidFields.remove(.email)
+                    }
 
                     PhoneNumberField(
                         countryRegion: $draft.phoneCountryRegion,
@@ -189,6 +197,7 @@ struct EditProfileView: View {
                     onVerified: {
                         verifiedEmail = draft.email.normalizedEmail
                         isShowingEmailVerification = false
+                        onSave(draft)
                     }
                 )
                 .transition(.opacity)
@@ -290,6 +299,15 @@ struct EditProfileView: View {
         return "Passwords do not match"
     }
 
+    private var ageError: String? {
+        guard invalidFields.contains(.age),
+              let age = Int(draft.age),
+              age < 15
+        else { return nil }
+
+        return "Age must be at least 15"
+    }
+
     private func validateAndSave(using proxy: ScrollViewProxy) {
         var invalid: Set<ProfileField> = []
 
@@ -363,9 +381,38 @@ struct EditProfileView: View {
             return
         }
         if draft.email.normalizedEmail != verifiedEmail {
-            isShowingEmailVerification = true
+            checkEmailAvailability()
         } else {
             onSave(draft)
+        }
+    }
+
+    private func checkEmailAvailability() {
+        guard !isCheckingEmail else { return }
+        isCheckingEmail = true
+
+        Task {
+            defer { isCheckingEmail = false }
+
+            do {
+                let isAvailable = try await ProfileEmailAvailability.isAvailable(
+                    draft.email.normalizedEmail
+                )
+
+                guard isAvailable else {
+                    invalidFields.insert(.email)
+                    emailErrorMessage = "The email address is already in use by another account."
+                    validationMessage = "Incorrect information entered"
+                    return
+                }
+
+                emailErrorMessage = nil
+                isShowingEmailVerification = true
+            } catch {
+                invalidFields.insert(.email)
+                emailErrorMessage = "Could not check whether this email is available. Please try again."
+                validationMessage = "Incorrect information entered"
+            }
         }
     }
 
@@ -656,8 +703,8 @@ struct EmailVerificationView: View {
             )
         case .emailAlreadyInUse:
             return tr(
-                "This email is already used by another account.",
-                "هذا البريد مستخدم في حساب آخر."
+                "The email address is already in use by another account.",
+                "البريد الإلكتروني مستخدم بالفعل من حساب آخر."
             )
         case .invalidEmail:
             return tr(

@@ -22,7 +22,7 @@ private enum PendingAction {
 }
 
 private enum HomeAlert: Identifiable {
-    case locationNeeded, locationUnavailable, confirmSOS, paramedicOnWay, confirmOthers, disconnectWatch, outsideServiceArea
+    case locationNeeded, locationUnavailable, confirmSOS, paramedicOnWay, confirmOthers, connectWatch, disconnectWatch, outsideServiceArea
     var id: String {
         switch self {
         case .locationNeeded: "locationNeeded"
@@ -31,6 +31,7 @@ private enum HomeAlert: Identifiable {
         case .confirmSOS: "confirmSOS"
         case .paramedicOnWay: "paramedicOnWay"
         case .confirmOthers: "confirmOthers"
+        case .connectWatch: "connectWatch"
         case .disconnectWatch: "disconnectWatch"
         }
     }
@@ -43,6 +44,7 @@ private enum HomeAlert: Identifiable {
         case .confirmSOS: appLocalized("Are you sure you want to send an SOS?")
         case .paramedicOnWay: appLocalized("A paramedic is on the way to help you.")
         case .confirmOthers: appLocalized("Are you sure you want to send help to another person?")
+        case .connectWatch: appLocalized("Connect your Apple Watch")
         case .disconnectWatch: appLocalized("Disconnect Apple Watch?")
         }
     }
@@ -59,6 +61,8 @@ private enum HomeAlert: Identifiable {
             )
         case .confirmOthers:
             appLocalized("Your phone number and location will be shared with paramedics.")
+        case .connectWatch:
+            appLocalized("To use this feature, wear your Apple Watch and allow Mulabbi to read your heart-rate data from the Health app.")
         case .disconnectWatch:
             appLocalized("Heart rate monitoring and notifications will stop.")
         default:
@@ -279,14 +283,7 @@ struct HomeView: View {
                     if isWatchConnected {
                         activeAlert = .disconnectWatch
                     } else {
-                        Task {
-                            do {
-                                let age = try await settingsStore.fetchAge()
-                                try await heartRateMonitor.connect(age: age)
-                            } catch {
-                                print("Unable to connect heart-rate monitoring: \(error)")
-                            }
-                        }
+                        activeAlert = .connectWatch
                     }
                 } label: {
                     Text(appLocalized(isWatchConnected ? "Disconnect" : "Connect"))
@@ -426,6 +423,15 @@ struct HomeView: View {
         case .confirmOthers:
             activeAlert = nil
             locationManager.requestCurrentLocation()
+        case .connectWatch:
+            Task {
+                do {
+                    let age = try await settingsStore.fetchAge()
+                    try await heartRateMonitor.connect(age: age)
+                } catch {
+                    print("Unable to connect heart-rate monitoring: \(error)")
+                }
+            }
         case .disconnectWatch:
             heartRateMonitor.disconnect()
             dismissHomeAlert()
@@ -554,6 +560,7 @@ private struct HomeAlertOverlay: View {
         case .confirmSOS: appLocalized("Send")
         case .paramedicOnWay, .outsideServiceArea, .locationUnavailable: appLocalized("OK")
         case .confirmOthers: appLocalized("Yes")
+        case .connectWatch: appLocalized("Continue")
         case .disconnectWatch: appLocalized("Disconnect")
         }
     }
@@ -561,7 +568,7 @@ private struct HomeAlertOverlay: View {
     private var secondaryTitle: String? {
         switch alert {
         case .locationNeeded: appLocalized("Don't Allow")
-        case .confirmSOS, .confirmOthers, .disconnectWatch: appLocalized("Cancel")
+        case .confirmSOS, .confirmOthers, .connectWatch, .disconnectWatch: appLocalized("Cancel")
         case .paramedicOnWay, .outsideServiceArea, .locationUnavailable: nil        }
     }
 
