@@ -1023,7 +1023,7 @@ struct ParamedicSignUpView: View {
                                 ruleRow(
                                     tr(
                                         "Passwords match",
-                                        "كلمتا المرور متطابقتان"
+                                        "كلمة المرور متطابقه"
                                     ),
                                     isMet:
                                         passwordsMatch
