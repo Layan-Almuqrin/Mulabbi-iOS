@@ -19,7 +19,6 @@ struct PilgrimSignUpView: View {
     @State private var phoneNumber = ""
     @State private var selectedCountry = CountryPhoneCode.saudiArabia
     @State private var nationality = ""
-
     @State private var bloodType = "Choose your blood type"
     @State private var gender = ""
 
@@ -48,6 +47,14 @@ struct PilgrimSignUpView: View {
     private func tr(_ en: String, _ ar: String) -> String {
         appLanguage == "ar" ? ar : en
     }
+    private func languageDisplayName(_ value: String) -> String {
+        switch value {
+        case "Arabic": return tr("Arabic", "العربية")
+        case "English": return tr("English", "الإنجليزية")
+        case "Urdu": return tr("Urdu", "الأردية")
+        default: return value
+        }
+    }
     private func westernDigits(_ text: String) -> String {
         text.map { character in
             character.wholeNumberValue.map { String($0) } ?? String(character)
@@ -61,7 +68,7 @@ struct PilgrimSignUpView: View {
     }
     private func medicalError(_ value: String) -> String? {
         value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? tr("Required. Write \"None\" if you don't have any", "مطلوب. اكتب \"لا يوجد\" إذا ما عندك")
+            ? tr("Required. Write \"None\" if you don't have any", "مطلوب. اكتب \"لا يوجد\" إذا لم يكن لديك")
             : nil
     }
 
@@ -426,7 +433,7 @@ struct PilgrimSignUpView: View {
                             )
 
                             ruleRow(
-                                tr("Passwords match", "كلمتا المرور متطابقتان"),
+                                tr("Passwords match", "كلمة المرور متطابقه"),
                                 isMet: passwordsMatch
                             )
                         }
@@ -483,7 +490,7 @@ struct PilgrimSignUpView: View {
                                             newLanguage = ""
                                             showAddLanguage = true
                                         } label: {
-                                            Text("+ Add")
+                                            Text(tr("+ Add", "+ إضافة"))
                                                 .font(.system(size: 12))
                                                 .foregroundColor(.black)
                                                 .padding(.horizontal, 10)
@@ -523,7 +530,7 @@ struct PilgrimSignUpView: View {
                         } message: {
                             Text(tr(
                                 "Enter the language you want to add.",
-                                "اكتبي اللغة اللي تبين تضيفينها."
+                                "اكتب اللغة اللتي تريد إضافتها."
                             ))
                         }
 
@@ -891,7 +898,7 @@ struct PilgrimSignUpView: View {
                 selectedLanguages.insert(value)
             }
         } label: {
-            Text(language)
+            Text(languageDisplayName(language))
         }
         .font(.system(size: 12))
         .foregroundColor(.black)
@@ -1117,4 +1124,3 @@ struct PilgrimEmailVerificationView: View {
 #Preview {
     PilgrimSignUpView()
 }
-
