@@ -750,8 +750,30 @@
         }
       }
     },
+    "Continue" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "متابعة"
+          }
+        }
+      }
+    },
     "Could not send link" : {
 
+    },
+    "Could not check whether this email is available. Please try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "تعذر التحقق من توفر البريد الإلكتروني. حاولي مرة أخرى."
+          }
+        }
+      }
     },
     "Country or calling code" : {
       "comment" : "A placeholder for a search bar.",
@@ -999,6 +1021,17 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "الإنجليزية"
+          }
+        }
+      }
+    },
+    "Age must be at least 15" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "يجب ألا يقل العمر عن 15"
           }
         }
       }
@@ -1271,6 +1304,28 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "الجنس: %@"
+          }
+        }
+      }
+    },
+    "The email address is already in use by another account." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "البريد الإلكتروني مستخدم بالفعل من حساب آخر."
+          }
+        }
+      }
+    },
+    "To use this feature, wear your Apple Watch and allow Mulabbi to read your heart-rate data from the Health app." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ar" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "لتعمل الميزة، ارتدِ ساعة Apple واسمح لملبّي بقراءة بيانات نبض القلب من تطبيق «صحتي»."
           }
         }
       }
